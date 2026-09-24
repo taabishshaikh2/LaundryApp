@@ -16,12 +16,20 @@ const STATUS_LIST = [
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
+  const [riders, setRiders] = useState([]);
+  const [partners, setPartners] = useState([]);
   const [updatingId, setUpdatingId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
 
   async function load() {
-    const res = await api.get("/orders/admin/all");
-    setOrders(res.data.orders);
+    const [ordersRes, ridersRes, partnersRes] = await Promise.all([
+      api.get("/orders/admin/all"),
+      api.get("/admin/riders"),
+      api.get("/admin/laundry-partners"),
+    ]);
+    setOrders(ordersRes.data.orders);
+    setRiders(ridersRes.data.riders);
+    setPartners(partnersRes.data.partners);
   }
 
   useEffect(() => {
@@ -32,6 +40,28 @@ export default function AdminOrders() {
     setUpdatingId(orderId);
     try {
       await api.put(`/orders/admin/${orderId}/status`, { status });
+      await load();
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function assignRider(orderId, riderId) {
+    if (!riderId) return;
+    setUpdatingId(orderId);
+    try {
+      await api.put(`/orders/admin/${orderId}/assign-rider`, { riderId });
+      await load();
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function assignPartner(orderId, partnerId) {
+    if (!partnerId) return;
+    setUpdatingId(orderId);
+    try {
+      await api.put(`/orders/admin/${orderId}/assign-partner`, { partnerId });
       await load();
     } finally {
       setUpdatingId(null);
@@ -50,6 +80,8 @@ export default function AdminOrders() {
               <th className="p-3">Items</th>
               <th className="p-3">Total</th>
               <th className="p-3">Status</th>
+              <th className="p-3">Rider</th>
+              <th className="p-3">Partner</th>
               <th className="p-3">History</th>
             </tr>
           </thead>
@@ -79,6 +111,32 @@ export default function AdminOrders() {
                     </select>
                   </td>
                   <td className="p-3">
+                    <select
+                      value={o.riderId?._id || ""}
+                      disabled={updatingId === o._id}
+                      onChange={(e) => assignRider(o._id, e.target.value)}
+                      className="border rounded-lg px-2 py-1 text-xs"
+                    >
+                      <option value="">Unassigned</option>
+                      {riders.map((r) => (
+                        <option key={r._id} value={r._id}>{r.name}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="p-3">
+                    <select
+                      value={o.partnerId?._id || ""}
+                      disabled={updatingId === o._id}
+                      onChange={(e) => assignPartner(o._id, e.target.value)}
+                      className="border rounded-lg px-2 py-1 text-xs"
+                    >
+                      <option value="">Unassigned</option>
+                      {partners.map((p) => (
+                        <option key={p._id} value={p._id}>{p.businessName}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="p-3">
                     <button
                       onClick={() => setExpandedId(expandedId === o._id ? null : o._id)}
                       className="text-brand-600 text-xs underline"
@@ -89,9 +147,9 @@ export default function AdminOrders() {
                 </tr>
                 {expandedId === o._id && (
                   <tr className="border-t bg-gray-50">
-                    <td colSpan={7} className="p-4">
+                    <td colSpan={9} className="p-4">
                       <p className="font-semibold text-xs uppercase text-gray-400 mb-2">Status history</p>
-                      <ul className="space-y-1 text-sm">
+                      <ul className="space-y-1 text-sm mb-4">
                         {o.statusHistory.map((h, idx) => (
                           <li key={idx} className="flex justify-between">
                             <span>
@@ -104,13 +162,28 @@ export default function AdminOrders() {
                           </li>
                         ))}
                       </ul>
+                      {o.notes?.length > 0 && (
+                        <>
+                          <p className="font-semibold text-xs uppercase text-gray-400 mb-2">Notes</p>
+                          <ul className="space-y-1 text-sm">
+                            {o.notes.map((n, idx) => (
+                              <li key={idx} className="flex justify-between">
+                                <span>📝 {n.text} <span className="text-gray-400">({n.addedByRole})</span></span>
+                                <span className="text-gray-400 text-xs">
+                                  {new Date(n.timestamp).toLocaleString()}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
                     </td>
                   </tr>
                 )}
               </React.Fragment>
             ))}
             {orders.length === 0 && (
-              <tr><td colSpan={7} className="p-6 text-center text-gray-400">No orders yet</td></tr>
+              <tr><td colSpan={9} className="p-6 text-center text-gray-400">No orders yet</td></tr>
             )}
           </tbody>
         </table>

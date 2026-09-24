@@ -3,7 +3,11 @@ import mongoose from "mongoose";
 import Order, { ORDER_STATUS_LIST } from "../models/Order.js";
 import Garment from "../models/Garment.js";
 import Service from "../models/Service.js";
+import User from "../models/User.js";
+import LaundryPartner from "../models/LaundryPartner.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import { advanceOrderStatus } from "../utils/orderStatus.js";
+import { sendWhatsAppNotification } from "../services/whatsapp.js";
 
 const router = express.Router();
 
@@ -77,6 +81,9 @@ router.post("/", requireAuth, async (req, res) => {
     });
 
     res.status(201).json({ order });
+
+    // fire-and-forget: don't block the response on the notification write
+    sendWhatsAppNotification(order, "ORDER_PLACED").catch(() => {});
   } catch (err) {
     res.status(400).json({ error: "Could not create order", detail: err.message });
   }
@@ -101,7 +108,11 @@ router.get("/:id", requireAuth, async (req, res) => {
 // ---- Admin ----
 
 router.get("/admin/all", requireAuth, requireAdmin, async (req, res) => {
-  const orders = await Order.find().sort({ createdAt: -1 }).populate("userId", "name phone email");
+  const orders = await Order.find()
+    .sort({ createdAt: -1 })
+    .populate("userId", "name phone email")
+    .populate("riderId", "name phone")
+    .populate("partnerId", "businessName phone");
   res.json({ orders });
 });
 
@@ -113,20 +124,53 @@ router.put("/admin/:id/status", requireAuth, requireAdmin, async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (!order) return res.status(404).json({ error: "Order not found" });
 
-  const previousStatus = order.status;
-  order.status = status;
-  order.statusHistory.push({
-    previousStatus,
-    newStatus: status,
-    changedBy: req.user.id,
-    changedByRole: "ADMIN",
-    note,
-    timestamp: new Date(),
-  });
+  await advanceOrderStatus(order, status, { userId: req.user.id, role: "ADMIN", note });
+
+  res.json({ order });
+});
+
+// Assign a rider — auto-bumps ORDER_PLACED -> PICKUP_ASSIGNED
+router.put("/admin/:id/assign-rider", requireAuth, requireAdmin, async (req, res) => {
+  const { riderId } = req.body;
+  const rider = await User.findOne({ _id: riderId, role: "RIDER" });
+  if (!rider) return res.status(404).json({ error: "Rider not found" });
+
+  const order = await Order.findById(req.params.id);
+  if (!order) return res.status(404).json({ error: "Order not found" });
+
+  order.riderId = rider._id;
   await order.save();
 
-  // NOTE: this is where a WhatsApp notification would be triggered in production,
-  // e.g. sendWhatsAppTemplate(order, status) — stubbed out for this pilot.
+  if (order.status === "ORDER_PLACED") {
+    await advanceOrderStatus(order, "PICKUP_ASSIGNED", {
+      userId: req.user.id,
+      role: "ADMIN",
+      note: `Rider assigned: ${rider.name}`,
+    });
+  }
+
+  res.json({ order });
+});
+
+// Assign a laundry partner — auto-bumps PICKED_UP -> PROCESSING
+router.put("/admin/:id/assign-partner", requireAuth, requireAdmin, async (req, res) => {
+  const { partnerId } = req.body;
+  const partner = await LaundryPartner.findById(partnerId);
+  if (!partner) return res.status(404).json({ error: "Laundry partner not found" });
+
+  const order = await Order.findById(req.params.id);
+  if (!order) return res.status(404).json({ error: "Order not found" });
+
+  order.partnerId = partner._id;
+  await order.save();
+
+  if (order.status === "PICKED_UP") {
+    await advanceOrderStatus(order, "PROCESSING", {
+      userId: req.user.id,
+      role: "ADMIN",
+      note: `Laundry partner assigned: ${partner.businessName}`,
+    });
+  }
 
   res.json({ order });
 });

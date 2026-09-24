@@ -5,6 +5,7 @@ import Order from "../models/Order.js";
 import Garment from "../models/Garment.js";
 import Service from "../models/Service.js";
 import LaundryPartner from "../models/LaundryPartner.js";
+import Notification from "../models/Notification.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -162,25 +163,51 @@ router.delete("/services/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
-// ---- Laundry Partners ----
+// ---- Laundry Partners (each has its own login account, role LAUNDRY_PARTNER) ----
 router.get("/laundry-partners", async (req, res) => {
-  const partners = await LaundryPartner.find().sort({ createdAt: -1 });
+  const partners = await LaundryPartner.find().sort({ createdAt: -1 }).populate("userId", "name email phone");
   res.json({ partners });
 });
 
 router.post("/laundry-partners", async (req, res) => {
-  const { name, phone, address, servicesOffered } = req.body;
-  if (!name) return res.status(400).json({ error: "name is required" });
-  const partner = await LaundryPartner.create({ name, phone, address, servicesOffered });
-  res.status(201).json({ partner });
+  try {
+    const { businessName, contactName, email, phone, password, address, servicesOffered } = req.body;
+    if (!businessName || !contactName || !email || !phone || !password) {
+      return res.status(400).json({ error: "businessName, contactName, email, phone and password are required" });
+    }
+    const existing = await User.findOne({ email: email.toLowerCase() });
+    if (existing) return res.status(409).json({ error: "Email already registered" });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await User.create({
+      name: contactName,
+      email,
+      phone,
+      passwordHash,
+      role: "LAUNDRY_PARTNER",
+      onboarding: { completed: true },
+    });
+
+    const partner = await LaundryPartner.create({
+      userId: user._id,
+      businessName,
+      phone,
+      address,
+      servicesOffered,
+    });
+
+    res.status(201).json({ partner: { ...partner.toObject(), userId: { _id: user._id, name: user.name, email: user.email, phone: user.phone } } });
+  } catch (err) {
+    res.status(500).json({ error: "Could not create laundry partner", detail: err.message });
+  }
 });
 
 router.put("/laundry-partners/:id", async (req, res) => {
-  const { name, phone, address, servicesOffered, active } = req.body;
+  const { businessName, phone, address, servicesOffered, active } = req.body;
   const partner = await LaundryPartner.findByIdAndUpdate(
     req.params.id,
     {
-      ...(name !== undefined && { name }),
+      ...(businessName !== undefined && { businessName }),
       ...(phone !== undefined && { phone }),
       ...(address !== undefined && { address }),
       ...(servicesOffered !== undefined && { servicesOffered }),
@@ -195,7 +222,20 @@ router.put("/laundry-partners/:id", async (req, res) => {
 router.delete("/laundry-partners/:id", async (req, res) => {
   const partner = await LaundryPartner.findByIdAndDelete(req.params.id);
   if (!partner) return res.status(404).json({ error: "Laundry partner not found" });
+  if (partner.userId) {
+    await User.findByIdAndDelete(partner.userId);
+  }
   res.json({ ok: true });
+});
+
+// ---- Notifications log (WhatsApp messages sent per order) ----
+router.get("/notifications", async (req, res) => {
+  const notifications = await Notification.find()
+    .sort({ createdAt: -1 })
+    .limit(200)
+    .populate("userId", "name phone")
+    .populate("orderId", "status total");
+  res.json({ notifications });
 });
 
 export default router;

@@ -37,9 +37,21 @@ const statusHistorySchema = new mongoose.Schema(
   { _id: false }
 );
 
+const noteSchema = new mongoose.Schema(
+  {
+    text: { type: String, required: true },
+    addedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    addedByRole: String,
+    timestamp: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    riderId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    partnerId: { type: mongoose.Schema.Types.ObjectId, ref: "LaundryPartner", default: null },
     address: {
       label: String,
       line1: String,
@@ -55,6 +67,7 @@ const orderSchema = new mongoose.Schema(
     total: Number,
     status: { type: String, enum: ORDER_STATUSES, default: "ORDER_PLACED" },
     statusHistory: [statusHistorySchema],
+    notes: [noteSchema],
   },
   { timestamps: true }
 );

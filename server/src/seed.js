@@ -45,19 +45,6 @@ async function run() {
   await Service.insertMany(services);
   console.log(`Inserted ${services.length} services (Washing, Ironing, Dry Cleaning).`);
 
-  const partnerCount = await LaundryPartner.countDocuments();
-  if (partnerCount === 0) {
-    await LaundryPartner.create({
-      name: "Sunshine Laundry Works",
-      phone: "9877700000",
-      address: "Andheri East, Mumbai",
-      servicesOffered: ["WASHING", "IRONING", "DRY_CLEANING"],
-    });
-    console.log("Inserted a sample laundry partner.");
-  } else {
-    console.log("Laundry partners already exist, skipping.");
-  }
-
   const adminEmail = "admin@dhobighat.com";
   const existingAdmin = await User.findOne({ email: adminEmail });
   if (!existingAdmin) {
@@ -90,6 +77,30 @@ async function run() {
     console.log(`Created sample rider: ${riderEmail} / rider123`);
   } else {
     console.log("Sample rider already exists, skipping.");
+  }
+
+  const partnerEmail = "partner1@dhobighat.com";
+  const existingPartnerUser = await User.findOne({ email: partnerEmail });
+  if (!existingPartnerUser) {
+    const passwordHash = await bcrypt.hash("partner123", 10);
+    const partnerUser = await User.create({
+      name: "Suresh (Partner contact)",
+      email: partnerEmail,
+      phone: "9877700000",
+      passwordHash,
+      role: "LAUNDRY_PARTNER",
+      onboarding: { completed: true },
+    });
+    await LaundryPartner.create({
+      userId: partnerUser._id,
+      businessName: "Sunshine Laundry Works",
+      phone: "9877700000",
+      address: "Andheri East, Mumbai",
+      servicesOffered: ["WASHING", "IRONING", "DRY_CLEANING"],
+    });
+    console.log(`Created sample laundry partner login: ${partnerEmail} / partner123`);
+  } else {
+    console.log("Sample laundry partner already exists, skipping.");
   }
 
   await mongoose.disconnect();

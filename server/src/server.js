@@ -8,6 +8,8 @@ import garmentRoutes from "./routes/garments.js";
 import serviceRoutes from "./routes/services.js";
 import orderRoutes from "./routes/orders.js";
 import adminRoutes from "./routes/admin.js";
+import riderRoutes from "./routes/rider.js";
+import partnerRoutes from "./routes/partner.js";
 
 const app = express();
 
@@ -25,6 +27,8 @@ app.use("/api/garments", garmentRoutes);
 app.use("/api/services", serviceRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/rider", riderRoutes);
+app.use("/api/partner", partnerRoutes);
 
 // basic error handler
 app.use((err, req, res, next) => {

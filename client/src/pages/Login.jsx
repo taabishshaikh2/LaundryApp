@@ -16,7 +16,10 @@ export default function Login() {
     setLoading(true);
     try {
       const user = await login(email, password);
-      navigate(user.onboarding?.completed ? "/" : "/onboarding");
+      if (user.role === "ADMIN") navigate("/admin");
+      else if (user.role === "RIDER") navigate("/rider");
+      else if (user.role === "LAUNDRY_PARTNER") navigate("/partner");
+      else navigate(user.onboarding?.completed ? "/" : "/onboarding");
     } catch (err) {
       setError(err?.response?.data?.error || "Login failed");
     } finally {

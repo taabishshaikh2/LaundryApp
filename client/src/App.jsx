@@ -11,6 +11,8 @@ import NewOrder from "./pages/NewOrder";
 import OrderTracking from "./pages/OrderTracking";
 import OrderHistory from "./pages/OrderHistory";
 import Profile from "./pages/Profile";
+import RiderDashboard from "./pages/RiderDashboard";
+import PartnerDashboard from "./pages/PartnerDashboard";
 
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -20,6 +22,7 @@ import AdminRiders from "./pages/AdminRiders";
 import AdminPricing from "./pages/AdminPricing";
 import AdminServices from "./pages/AdminServices";
 import AdminLaundryPartners from "./pages/AdminLaundryPartners";
+import AdminNotifications from "./pages/AdminNotifications";
 import AdminComingSoon from "./pages/AdminComingSoon";
 
 export default function App() {
@@ -45,6 +48,9 @@ export default function App() {
         <Route path="/orders/:id" element={<ProtectedRoute><OrderTracking /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
+        <Route path="/rider" element={<ProtectedRoute roles={["RIDER"]}><RiderDashboard /></ProtectedRoute>} />
+        <Route path="/partner" element={<ProtectedRoute roles={["LAUNDRY_PARTNER"]}><PartnerDashboard /></ProtectedRoute>} />
+
         <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
         <Route path="/admin/orders" element={<ProtectedRoute adminOnly><AdminOrders /></ProtectedRoute>} />
         <Route path="/admin/customers" element={<ProtectedRoute adminOnly><AdminCustomers /></ProtectedRoute>} />
@@ -68,14 +74,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route
-          path="/admin/notifications"
-          element={
-            <ProtectedRoute adminOnly>
-              <AdminComingSoon title="Notifications log" description="See WhatsApp messages sent per order once integrated." />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/admin/notifications" element={<ProtectedRoute adminOnly><AdminNotifications /></ProtectedRoute>} />
         <Route
           path="/admin/issues"
           element={
