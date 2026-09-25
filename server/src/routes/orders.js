@@ -95,14 +95,28 @@ router.get("/", requireAuth, async (req, res) => {
   res.json({ orders });
 });
 
-// Single order (owner or admin)
+// Single order (owner or admin) - FIXED
 router.get("/:id", requireAuth, async (req, res) => {
-  const order = await Order.findById(req.params.id);
-  if (!order) return res.status(404).json({ error: "Order not found" });
-  if (String(order.userId) !== req.user.id && req.user.role !== "ADMIN") {
-    return res.status(403).json({ error: "Not your order" });
+  try {
+    // Sanitize the ID - remove any quotes or whitespace
+    const orderId = req.params.id.replace(/["'\s]/g, '');
+    
+    // Validate it's a proper MongoDB ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ error: "Invalid order ID format" });
+    }
+    
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    
+    if (String(order.userId) !== req.user.id && req.user.role !== "ADMIN") {
+      return res.status(403).json({ error: "Not your order" });
+    }
+    
+    res.json({ order });
+  } catch (err) {
+    res.status(400).json({ error: "Invalid request", detail: err.message });
   }
-  res.json({ order });
 });
 
 // ---- Admin ----
@@ -116,63 +130,101 @@ router.get("/admin/all", requireAuth, requireAdmin, async (req, res) => {
   res.json({ orders });
 });
 
+// Admin status update - FIXED
 router.put("/admin/:id/status", requireAuth, requireAdmin, async (req, res) => {
-  const { status, note } = req.body;
-  if (!ORDER_STATUS_LIST.includes(status)) {
-    return res.status(400).json({ error: "Invalid status" });
+  try {
+    // Sanitize the ID - remove any quotes or whitespace
+    const orderId = req.params.id.replace(/["'\s]/g, '');
+    
+    // Validate it's a proper MongoDB ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ error: "Invalid order ID format" });
+    }
+    
+    const { status, note } = req.body;
+    if (!ORDER_STATUS_LIST.includes(status)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+    
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    await advanceOrderStatus(order, status, { userId: req.user.id, role: "ADMIN", note });
+
+    res.json({ order });
+  } catch (err) {
+    res.status(400).json({ error: "Could not update order", detail: err.message });
   }
-  const order = await Order.findById(req.params.id);
-  if (!order) return res.status(404).json({ error: "Order not found" });
-
-  await advanceOrderStatus(order, status, { userId: req.user.id, role: "ADMIN", note });
-
-  res.json({ order });
 });
 
-// Assign a rider — auto-bumps ORDER_PLACED -> PICKUP_ASSIGNED
+// Assign a rider - FIXED
 router.put("/admin/:id/assign-rider", requireAuth, requireAdmin, async (req, res) => {
-  const { riderId } = req.body;
-  const rider = await User.findOne({ _id: riderId, role: "RIDER" });
-  if (!rider) return res.status(404).json({ error: "Rider not found" });
+  try {
+    // Sanitize the ID - remove any quotes or whitespace
+    const orderId = req.params.id.replace(/["'\s]/g, '');
+    
+    // Validate it's a proper MongoDB ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ error: "Invalid order ID format" });
+    }
+    
+    const { riderId } = req.body;
+    const rider = await User.findOne({ _id: riderId, role: "RIDER" });
+    if (!rider) return res.status(404).json({ error: "Rider not found" });
 
-  const order = await Order.findById(req.params.id);
-  if (!order) return res.status(404).json({ error: "Order not found" });
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ error: "Order not found" });
 
-  order.riderId = rider._id;
-  await order.save();
+    order.riderId = rider._id;
+    await order.save();
 
-  if (order.status === "ORDER_PLACED") {
-    await advanceOrderStatus(order, "PICKUP_ASSIGNED", {
-      userId: req.user.id,
-      role: "ADMIN",
-      note: `Rider assigned: ${rider.name}`,
-    });
+    if (order.status === "ORDER_PLACED") {
+      await advanceOrderStatus(order, "PICKUP_ASSIGNED", {
+        userId: req.user.id,
+        role: "ADMIN",
+        note: `Rider assigned: ${rider.name}`,
+      });
+    }
+
+    res.json({ order });
+  } catch (err) {
+    res.status(400).json({ error: "Could not assign rider", detail: err.message });
   }
-
-  res.json({ order });
 });
 
-// Assign a laundry partner — auto-bumps PICKED_UP -> PROCESSING
+// Assign a laundry partner - FIXED
 router.put("/admin/:id/assign-partner", requireAuth, requireAdmin, async (req, res) => {
-  const { partnerId } = req.body;
-  const partner = await LaundryPartner.findById(partnerId);
-  if (!partner) return res.status(404).json({ error: "Laundry partner not found" });
+  try {
+    // Sanitize the ID - remove any quotes or whitespace
+    const orderId = req.params.id.replace(/["'\s]/g, '');
+    
+    // Validate it's a proper MongoDB ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ error: "Invalid order ID format" });
+    }
+    
+    const { partnerId } = req.body;
+    const partner = await LaundryPartner.findById(partnerId);
+    if (!partner) return res.status(404).json({ error: "Laundry partner not found" });
 
-  const order = await Order.findById(req.params.id);
-  if (!order) return res.status(404).json({ error: "Order not found" });
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ error: "Order not found" });
 
-  order.partnerId = partner._id;
-  await order.save();
+    order.partnerId = partner._id;
+    await order.save();
 
-  if (order.status === "PICKED_UP") {
-    await advanceOrderStatus(order, "PROCESSING", {
-      userId: req.user.id,
-      role: "ADMIN",
-      note: `Laundry partner assigned: ${partner.businessName}`,
-    });
+    if (order.status === "PICKED_UP") {
+      await advanceOrderStatus(order, "PROCESSING", {
+        userId: req.user.id,
+        role: "ADMIN",
+        note: `Laundry partner assigned: ${partner.businessName}`,
+      });
+    }
+
+    res.json({ order });
+  } catch (err) {
+    res.status(400).json({ error: "Could not assign partner", detail: err.message });
   }
-
-  res.json({ order });
 });
 
 export default router;
