@@ -1,9 +1,10 @@
 import Notification from "../models/Notification.js";
+import User from "../models/User.js";
 
 // Message copy per order status. Kept in one place so it's easy to hand
 // these to Meta/Gupshup/Twilio for template approval later.
 const TEMPLATES = {
-  ORDER_PLACED: (o) => `Hi! Your Dhobi Ghat order #${shortId(o)} has been placed. We'll notify you at every step. Track: ${trackLink(o)}`,
+  ORDER_PLACED: (o, name) => `Hi ${name}! Your Dhobi Ghat order #${shortId(o)} has been placed. We'll notify you at every step. Track: ${trackLink(o)}`,
   PICKUP_ASSIGNED: (o) => `A rider has been assigned to pick up your order #${shortId(o)}. Track: ${trackLink(o)}`,
   RIDER_ON_THE_WAY: (o) => `Your rider is on the way for order #${shortId(o)}.`,
   PICKED_UP: (o) => `Your laundry for order #${shortId(o)} has been picked up. Thank you!`,
@@ -37,7 +38,16 @@ function trackLink(order) {
 export async function sendWhatsAppNotification(order, status) {
   const buildMessage = TEMPLATES[status];
   if (!buildMessage) return null;
-  const message = buildMessage(order);
+
+  // order.userId may already be populated (has .name) or just an ObjectId —
+  // handle both so callers don't need to remember to populate it.
+  let customerName = order.userId?.name;
+  if (!customerName) {
+    const user = await User.findById(order.userId).select("name");
+    customerName = user?.name || "there";
+  }
+
+  const message = buildMessage(order, customerName);
 
   const notification = await Notification.create({
     orderId: order._id,
