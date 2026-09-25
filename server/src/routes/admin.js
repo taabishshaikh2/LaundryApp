@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import Order from "../models/Order.js";
@@ -68,15 +69,26 @@ router.post("/riders", async (req, res) => {
   }
 });
 
+// FIXED - Line 71
 router.put("/riders/:id", async (req, res) => {
-  const { name, phone, active } = req.body;
-  const rider = await User.findOneAndUpdate(
-    { _id: req.params.id, role: "RIDER" },
-    { ...(name && { name }), ...(phone && { phone }) },
-    { new: true }
-  ).select("-passwordHash");
-  if (!rider) return res.status(404).json({ error: "Rider not found" });
-  res.json({ rider });
+  try {
+    // Sanitize the ID
+    const riderId = req.params.id.replace(/["'\s]/g, '');
+    if (!mongoose.Types.ObjectId.isValid(riderId)) {
+      return res.status(400).json({ error: "Invalid rider ID format" });
+    }
+
+    const { name, phone, active } = req.body;
+    const rider = await User.findOneAndUpdate(
+      { _id: riderId, role: "RIDER" },
+      { ...(name && { name }), ...(phone && { phone }) },
+      { new: true }
+    ).select("-passwordHash");
+    if (!rider) return res.status(404).json({ error: "Rider not found" });
+    res.json({ rider });
+  } catch (err) {
+    res.status(400).json({ error: "Could not update rider", detail: err.message });
+  }
 });
 
 // ---- Garments / Pricing ----
@@ -94,26 +106,48 @@ router.post("/garments", async (req, res) => {
   res.status(201).json({ garment });
 });
 
+// FIXED - Line 97
 router.put("/garments/:id", async (req, res) => {
-  const { name, priceRegular, active, icon } = req.body;
-  const garment = await Garment.findByIdAndUpdate(
-    req.params.id,
-    {
-      ...(name !== undefined && { name }),
-      ...(priceRegular !== undefined && { priceRegular }),
-      ...(active !== undefined && { active }),
-      ...(icon !== undefined && { icon }),
-    },
-    { new: true }
-  );
-  if (!garment) return res.status(404).json({ error: "Garment not found" });
-  res.json({ garment });
+  try {
+    // Sanitize the ID
+    const garmentId = req.params.id.replace(/["'\s]/g, '');
+    if (!mongoose.Types.ObjectId.isValid(garmentId)) {
+      return res.status(400).json({ error: "Invalid garment ID format" });
+    }
+
+    const { name, priceRegular, active, icon } = req.body;
+    const garment = await Garment.findByIdAndUpdate(
+      garmentId,
+      {
+        ...(name !== undefined && { name }),
+        ...(priceRegular !== undefined && { priceRegular }),
+        ...(active !== undefined && { active }),
+        ...(icon !== undefined && { icon }),
+      },
+      { new: true }
+    );
+    if (!garment) return res.status(404).json({ error: "Garment not found" });
+    res.json({ garment });
+  } catch (err) {
+    res.status(400).json({ error: "Could not update garment", detail: err.message });
+  }
 });
 
+// FIXED - Line 113
 router.delete("/garments/:id", async (req, res) => {
-  const garment = await Garment.findByIdAndDelete(req.params.id);
-  if (!garment) return res.status(404).json({ error: "Garment not found" });
-  res.json({ ok: true });
+  try {
+    // Sanitize the ID
+    const garmentId = req.params.id.replace(/["'\s]/g, '');
+    if (!mongoose.Types.ObjectId.isValid(garmentId)) {
+      return res.status(400).json({ error: "Invalid garment ID format" });
+    }
+
+    const garment = await Garment.findByIdAndDelete(garmentId);
+    if (!garment) return res.status(404).json({ error: "Garment not found" });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: "Could not delete garment", detail: err.message });
+  }
 });
 
 // ---- Services (Washing / Ironing / Dry Cleaning etc.) ----
@@ -140,27 +174,49 @@ router.post("/services", async (req, res) => {
   }
 });
 
+// FIXED - Line 143
 router.put("/services/:id", async (req, res) => {
-  const { name, icon, description, priceMultiplier, active } = req.body;
-  const service = await Service.findByIdAndUpdate(
-    req.params.id,
-    {
-      ...(name !== undefined && { name }),
-      ...(icon !== undefined && { icon }),
-      ...(description !== undefined && { description }),
-      ...(priceMultiplier !== undefined && { priceMultiplier }),
-      ...(active !== undefined && { active }),
-    },
-    { new: true }
-  );
-  if (!service) return res.status(404).json({ error: "Service not found" });
-  res.json({ service });
+  try {
+    // Sanitize the ID
+    const serviceId = req.params.id.replace(/["'\s]/g, '');
+    if (!mongoose.Types.ObjectId.isValid(serviceId)) {
+      return res.status(400).json({ error: "Invalid service ID format" });
+    }
+
+    const { name, icon, description, priceMultiplier, active } = req.body;
+    const service = await Service.findByIdAndUpdate(
+      serviceId,
+      {
+        ...(name !== undefined && { name }),
+        ...(icon !== undefined && { icon }),
+        ...(description !== undefined && { description }),
+        ...(priceMultiplier !== undefined && { priceMultiplier }),
+        ...(active !== undefined && { active }),
+      },
+      { new: true }
+    );
+    if (!service) return res.status(404).json({ error: "Service not found" });
+    res.json({ service });
+  } catch (err) {
+    res.status(400).json({ error: "Could not update service", detail: err.message });
+  }
 });
 
+// FIXED - Line 160
 router.delete("/services/:id", async (req, res) => {
-  const service = await Service.findByIdAndDelete(req.params.id);
-  if (!service) return res.status(404).json({ error: "Service not found" });
-  res.json({ ok: true });
+  try {
+    // Sanitize the ID
+    const serviceId = req.params.id.replace(/["'\s]/g, '');
+    if (!mongoose.Types.ObjectId.isValid(serviceId)) {
+      return res.status(400).json({ error: "Invalid service ID format" });
+    }
+
+    const service = await Service.findByIdAndDelete(serviceId);
+    if (!service) return res.status(404).json({ error: "Service not found" });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: "Could not delete service", detail: err.message });
+  }
 });
 
 // ---- Laundry Partners (each has its own login account, role LAUNDRY_PARTNER) ----
@@ -202,30 +258,52 @@ router.post("/laundry-partners", async (req, res) => {
   }
 });
 
+// FIXED - Line 205
 router.put("/laundry-partners/:id", async (req, res) => {
-  const { businessName, phone, address, servicesOffered, active } = req.body;
-  const partner = await LaundryPartner.findByIdAndUpdate(
-    req.params.id,
-    {
-      ...(businessName !== undefined && { businessName }),
-      ...(phone !== undefined && { phone }),
-      ...(address !== undefined && { address }),
-      ...(servicesOffered !== undefined && { servicesOffered }),
-      ...(active !== undefined && { active }),
-    },
-    { new: true }
-  );
-  if (!partner) return res.status(404).json({ error: "Laundry partner not found" });
-  res.json({ partner });
+  try {
+    // Sanitize the ID
+    const partnerId = req.params.id.replace(/["'\s]/g, '');
+    if (!mongoose.Types.ObjectId.isValid(partnerId)) {
+      return res.status(400).json({ error: "Invalid partner ID format" });
+    }
+
+    const { businessName, phone, address, servicesOffered, active } = req.body;
+    const partner = await LaundryPartner.findByIdAndUpdate(
+      partnerId,
+      {
+        ...(businessName !== undefined && { businessName }),
+        ...(phone !== undefined && { phone }),
+        ...(address !== undefined && { address }),
+        ...(servicesOffered !== undefined && { servicesOffered }),
+        ...(active !== undefined && { active }),
+      },
+      { new: true }
+    );
+    if (!partner) return res.status(404).json({ error: "Laundry partner not found" });
+    res.json({ partner });
+  } catch (err) {
+    res.status(400).json({ error: "Could not update partner", detail: err.message });
+  }
 });
 
+// FIXED - Line 222
 router.delete("/laundry-partners/:id", async (req, res) => {
-  const partner = await LaundryPartner.findByIdAndDelete(req.params.id);
-  if (!partner) return res.status(404).json({ error: "Laundry partner not found" });
-  if (partner.userId) {
-    await User.findByIdAndDelete(partner.userId);
+  try {
+    // Sanitize the ID
+    const partnerId = req.params.id.replace(/["'\s]/g, '');
+    if (!mongoose.Types.ObjectId.isValid(partnerId)) {
+      return res.status(400).json({ error: "Invalid partner ID format" });
+    }
+
+    const partner = await LaundryPartner.findByIdAndDelete(partnerId);
+    if (!partner) return res.status(404).json({ error: "Laundry partner not found" });
+    if (partner.userId) {
+      await User.findByIdAndDelete(partner.userId);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: "Could not delete partner", detail: err.message });
   }
-  res.json({ ok: true });
 });
 
 // ---- Notifications log (WhatsApp messages sent per order) ----
