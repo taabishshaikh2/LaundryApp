@@ -6,7 +6,7 @@ const serviceSchema = new mongoose.Schema(
     code: { type: String, required: true, unique: true }, // e.g. WASHING, IRONING, DRY_CLEANING
     icon: { type: String, default: "🧺" },
     description: String,
-    priceMultiplier: { type: Number, default: 1 }, // applied on top of a garment's base price
+    hasExpressOption: { type: Boolean, default: false }, // true for IRONING only
     active: { type: Boolean, default: true },
   },
   { timestamps: true }

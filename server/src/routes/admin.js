@@ -98,11 +98,20 @@ router.get("/garments", async (req, res) => {
 });
 
 router.post("/garments", async (req, res) => {
-  const { category, name, icon, unit, priceRegular } = req.body;
-  if (!category || !name || priceRegular == null) {
-    return res.status(400).json({ error: "category, name and priceRegular are required" });
+  const { category, name, icon, unit, washingPrice, dryCleaningPrice, ironingRegularPrice, ironingExpressPrice } = req.body;
+  if (!category || !name) {
+    return res.status(400).json({ error: "category and name are required" });
   }
-  const garment = await Garment.create({ category, name, icon, unit, priceRegular });
+  const garment = await Garment.create({
+    category,
+    name,
+    icon,
+    unit,
+    washingPrice: washingPrice || 0,
+    dryCleaningPrice: dryCleaningPrice || 0,
+    ironingRegularPrice: ironingRegularPrice || 0,
+    ironingExpressPrice: ironingExpressPrice || 0,
+  });
   res.status(201).json({ garment });
 });
 
@@ -115,12 +124,15 @@ router.put("/garments/:id", async (req, res) => {
       return res.status(400).json({ error: "Invalid garment ID format" });
     }
 
-    const { name, priceRegular, active, icon } = req.body;
+    const { name, washingPrice, dryCleaningPrice, ironingRegularPrice, ironingExpressPrice, active, icon } = req.body;
     const garment = await Garment.findByIdAndUpdate(
       garmentId,
       {
         ...(name !== undefined && { name }),
-        ...(priceRegular !== undefined && { priceRegular }),
+        ...(washingPrice !== undefined && { washingPrice }),
+        ...(dryCleaningPrice !== undefined && { dryCleaningPrice }),
+        ...(ironingRegularPrice !== undefined && { ironingRegularPrice }),
+        ...(ironingExpressPrice !== undefined && { ironingExpressPrice }),
         ...(active !== undefined && { active }),
         ...(icon !== undefined && { icon }),
       },
@@ -157,7 +169,7 @@ router.get("/services", async (req, res) => {
 });
 
 router.post("/services", async (req, res) => {
-  const { name, code, icon, description, priceMultiplier } = req.body;
+  const { name, code, icon, description, hasExpressOption } = req.body;
   if (!name || !code) return res.status(400).json({ error: "name and code are required" });
   try {
     const service = await Service.create({
@@ -165,7 +177,7 @@ router.post("/services", async (req, res) => {
       code: code.toUpperCase().replace(/\s+/g, "_"),
       icon,
       description,
-      priceMultiplier: priceMultiplier ?? 1,
+      hasExpressOption: hasExpressOption ?? false,
     });
     res.status(201).json({ service });
   } catch (err) {
@@ -183,14 +195,14 @@ router.put("/services/:id", async (req, res) => {
       return res.status(400).json({ error: "Invalid service ID format" });
     }
 
-    const { name, icon, description, priceMultiplier, active } = req.body;
+    const { name, icon, description, hasExpressOption, active } = req.body;
     const service = await Service.findByIdAndUpdate(
       serviceId,
       {
         ...(name !== undefined && { name }),
         ...(icon !== undefined && { icon }),
         ...(description !== undefined && { description }),
-        ...(priceMultiplier !== undefined && { priceMultiplier }),
+        ...(hasExpressOption !== undefined && { hasExpressOption }),
         ...(active !== undefined && { active }),
       },
       { new: true }

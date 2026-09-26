@@ -18,7 +18,7 @@ export default function AdminServices() {
     code: "",
     icon: "🧺",
     description: "",
-    priceMultiplier: 1,
+    hasExpressOption: false,
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -63,7 +63,13 @@ export default function AdminServices() {
     setSubmitting(true);
     try {
       await api.post("/admin/services", form);
-      setForm({ name: "", code: "", icon: "🧺", description: "", priceMultiplier: 1 });
+      setForm({
+        name: "",
+        code: "",
+        icon: "🧺",
+        description: "",
+        hasExpressOption: false,
+      });
       showSuccess("Service added successfully!");
       await load();
     } catch (err) {
@@ -89,11 +95,11 @@ export default function AdminServices() {
           <div className="flex gap-3">
             <span className="text-2xl">ℹ️</span>
             <div>
-              <p className="font-semibold text-blue-900 mb-1">About Price Multiplier</p>
+              <p className="font-semibold text-blue-900 mb-1">About Services</p>
               <p className="text-sm text-blue-800">
-                Price multiplier is applied on top of each garment's base price. For example:
-                <br />• Ironing at <strong>×0.6</strong> = 60% of base price (cheaper)
-                <br />• Dry Cleaning at <strong>×1.8</strong> = 180% of base price (premium)
+                Services define the types of laundry options available (Washing, Ironing, Dry
+                Cleaning). Prices are set per garment in the Pricing page. Only Ironing supports
+                Express delivery (1 hour).
               </p>
             </div>
           </div>
@@ -107,14 +113,14 @@ export default function AdminServices() {
             <form onSubmit={handleAdd} className="space-y-4">
               <Input
                 label="Service Name"
-                placeholder="e.g. Steam Ironing"
+                placeholder="e.g. Premium Wash"
                 required
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               />
               <Input
                 label="Code"
-                placeholder="e.g. STEAM_IRONING"
+                placeholder="e.g. PREMIUM_WASH"
                 required
                 value={form.code}
                 onChange={(e) => setForm((f) => ({ ...f, code: e.target.value.toUpperCase() }))}
@@ -132,19 +138,19 @@ export default function AdminServices() {
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               />
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-1">
-                  Price Multiplier
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.hasExpressOption}
+                    onChange={(e) => setForm((f) => ({ ...f, hasExpressOption: e.target.checked }))}
+                    className="w-4 h-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    Has Express Option (1 hour)
+                  </span>
                 </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  value={form.priceMultiplier}
-                  onChange={(e) => setForm((f) => ({ ...f, priceMultiplier: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Applied to garment base price (e.g., 0.6 for 60%, 1.8 for 180%)
+                <p className="text-xs text-gray-500 mt-1 ml-6">
+                  Only check this if the service offers 1-hour delivery
                 </p>
               </div>
               <Button type="submit" variant="primary" loading={submitting} className="w-full">
@@ -172,7 +178,7 @@ export default function AdminServices() {
                       <tr>
                         <th className="p-3 font-semibold">Service</th>
                         <th className="p-3 font-semibold">Code</th>
-                        <th className="p-3 font-semibold">Multiplier</th>
+                        <th className="p-3 font-semibold">Express Option</th>
                         <th className="p-3 font-semibold">Status</th>
                         <th className="p-3 font-semibold">Actions</th>
                       </tr>
@@ -190,7 +196,13 @@ export default function AdminServices() {
                           <td className="p-3">
                             <code className="text-xs bg-gray-100 px-2 py-1 rounded">{s.code}</code>
                           </td>
-                          <td className="p-3 font-bold text-brand-700">×{s.priceMultiplier}</td>
+                          <td className="p-3">
+                            {s.hasExpressOption ? (
+                              <Badge variant="warning">⚡ Yes</Badge>
+                            ) : (
+                              <span className="text-xs text-gray-500">No</span>
+                            )}
+                          </td>
                           <td className="p-3">
                             <button
                               onClick={() => toggleActive(s)}
@@ -236,9 +248,7 @@ export default function AdminServices() {
                         <button
                           onClick={() => toggleActive(s)}
                           className={`text-xs px-3 py-1 rounded-full font-medium transition-smooth ${
-                            s.active
-                              ? "bg-green-50 text-green-700"
-                              : "bg-gray-100 text-gray-600"
+                            s.active ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-600"
                           }`}
                         >
                           {s.active ? "Active" : "Inactive"}
@@ -246,8 +256,12 @@ export default function AdminServices() {
                       </div>
 
                       <div className="mb-3 pb-3 border-b border-gray-100">
-                        <p className="text-sm text-gray-600 mb-1">Price Multiplier</p>
-                        <p className="text-2xl font-bold text-brand-700">×{s.priceMultiplier}</p>
+                        <p className="text-sm text-gray-600 mb-1">Express Option</p>
+                        {s.hasExpressOption ? (
+                          <Badge variant="warning">⚡ Yes (1 hour)</Badge>
+                        ) : (
+                          <p className="text-sm text-gray-500">No</p>
+                        )}
                       </div>
 
                       <button

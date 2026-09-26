@@ -58,9 +58,11 @@ const orderSchema = new mongoose.Schema(
       line2: String,
       landmark: String,
     },
-    priority: { type: String, enum: ["REGULAR", "PRIORITY"], default: "REGULAR" },
+    // Speed: REGULAR (24-48hrs) or EXPRESS (1hr, Ironing only)
+    speed: { type: String, enum: ["REGULAR", "EXPRESS"], default: "REGULAR" },
     serviceId: { type: mongoose.Schema.Types.ObjectId, ref: "Service" },
     serviceName: String,
+    serviceCode: String, // WASHING, IRONING, DRY_CLEANING
     items: [orderItemSchema],
     subtotal: Number,
     gstAmount: Number,
