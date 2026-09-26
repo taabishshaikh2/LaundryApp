@@ -1,0 +1,139 @@
+/* Design System Utilities */
+
+/* Typography */
+.text-heading-1 {
+  @apply text-3xl font-bold tracking-tight;
+}
+
+.text-heading-2 {
+  @apply text-2xl font-bold tracking-tight;
+}
+
+.text-heading-3 {
+  @apply text-xl font-semibold;
+}
+
+.text-heading-4 {
+  @apply text-lg font-semibold;
+}
+
+.text-body {
+  @apply text-base;
+}
+
+.text-body-sm {
+  @apply text-sm;
+}
+
+/* Card Styles */
+.card {
+  @apply bg-white rounded-card shadow-card border border-gray-100;
+}
+
+.card-elevated {
+  @apply bg-white rounded-card shadow-elevated border border-gray-100;
+}
+
+.card-interactive {
+  @apply bg-white rounded-card shadow-card border border-gray-100 transition-all duration-200 hover:shadow-hover hover:-translate-y-0.5 cursor-pointer;
+}
+
+/* Button Base */
+.btn-base {
+  @apply rounded-button font-medium transition-all duration-200 inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+/* Transitions */
+.transition-smooth {
+  @apply transition-all duration-200 ease-out;
+}
+
+.hover-lift {
+  @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-hover;
+}
+
+/* Focus Styles */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2;
+}
+
+/* Loading Spinner */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-left-color: currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Status Badges */
+.badge {
+  @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium;
+}
+
+.badge-success {
+  @apply bg-green-100 text-green-800;
+}
+
+.badge-warning {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.badge-error {
+  @apply bg-red-100 text-red-800;
+}
+
+.badge-info {
+  @apply bg-blue-100 text-blue-800;
+}
+
+.badge-neutral {
+  @apply bg-gray-100 text-gray-800;
+}
+
+/* Gradient Overlays */
+.gradient-brand {
+  background: linear-gradient(135deg, #3a9d5d 0%, #2f7a4f 100%);
+}
+
+.gradient-subtle {
+  background: linear-gradient(135deg, #f2f7f4 0%, #dceee1 100%);
+}
+
+/* Skeleton Loading */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.skeleton {
+  animation: shimmer 2s infinite linear;
+  background: linear-gradient(to right, #f3f4f6 8%, #e5e7eb 18%, #f3f4f6 33%);
+  background-size: 1000px 100%;
+}
+
+/* Empty State */
+.empty-state {
+  @apply flex flex-col items-center justify-center p-8 text-center;
+}
+
+.empty-state-icon {
+  @apply text-5xl mb-4 opacity-50;
+}
+
+.empty-state-title {
+  @apply text-lg font-semibold text-gray-900 mb-2;
+}
+
+.empty-state-description {
+  @apply text-sm text-gray-500 mb-4;
+}
