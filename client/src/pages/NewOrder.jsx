@@ -135,8 +135,7 @@ export default function NewOrder() {
                 priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
               }`}
             >
-              <div className="font-semibold">Regular</div>
-              <div className="text-xs text-gray-500">4–5 hr delivery</div>
+              <div className="font-semibold">Standard 24-48hr delivery</div>
             </button>
             <button
               onClick={() => setPriority("PRIORITY")}
@@ -144,8 +143,7 @@ export default function NewOrder() {
                 priority === "PRIORITY" ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white"
               }`}
             >
-              <div className="font-semibold">Priority</div>
-              <div className="text-xs text-gray-500">2–3 hr · front of queue</div>
+              <div className="font-semibold">Express 1hr delivery</div>
             </button>
           </div>
 
@@ -177,7 +175,7 @@ export default function NewOrder() {
                 ))}
               </div>
             </div>
-          ))}
+          )))
 
           <button
             disabled={selectedItems.length === 0 || !serviceId}
@@ -192,7 +190,7 @@ export default function NewOrder() {
       {step === 2 && (
         <div className="max-w-md">
           <div className="border rounded-xl p-4 mb-4 bg-white">
-            <p className="font-semibold mb-1">{selectedService?.icon} {selectedService?.name} · {priority === "PRIORITY" ? "Priority" : "Regular"}</p>
+            <p className="font-semibold mb-1">{selectedService?.icon} {selectedService?.name} · {priority === "PRIORITY" ? "Express 1hr delivery" : "Standard 24-48hr delivery"}</p>
             <div className="border-t my-2" />
             <p className="font-semibold mb-3">Your items</p>
             {selectedItems.map((i) => (
