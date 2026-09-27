@@ -5,6 +5,7 @@ import Garment from "../models/Garment.js";
 import Service from "../models/Service.js";
 import User from "../models/User.js";
 import LaundryPartner from "../models/LaundryPartner.js";
+import Notification from "../models/Notification.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { advanceOrderStatus } from "../utils/orderStatus.js";
 import { sendWhatsAppNotification } from "../services/whatsapp.js";
@@ -122,13 +123,13 @@ router.post("/", requireAuth, async (req, res) => {
     // Notify admins of new order
     try {
       const admins = await User.find({ role: "ADMIN" });
-      const notificationPromises = admins.map(admin =>
+      const notificationPromises = admins.map((admin) =>
         Notification.create({
           userId: admin._id,
           title: "New Order Received",
-          message: `Order #${order._id.slice(-6).toUpperCase()} from ${req.user.name} has arrived.`,
+          message: `Order #${order._id.toString().slice(-6).toUpperCase()} from ${req.user.name || "a customer"} has arrived.`,
           type: "order_created",
-          orderId: order._id
+          orderId: order._id,
         })
       );
       await Promise.all(notificationPromises);
@@ -202,7 +203,7 @@ router.put("/admin/:id/status", requireAuth, requireAdmin, async (req, res) => {
 
     await advanceOrderStatus(order, status, { userId: req.user.id, role: "ADMIN", note });
 
-    res.json({ order);
+    res.json({ order });
   } catch (err) {
     res.status(400).json({ error: "Could not update order", detail: err.message });
   }
@@ -237,7 +238,7 @@ router.put("/admin/:id/assign-rider", requireAuth, requireAdmin, async (req, res
       });
     }
 
-    res.json({ order);
+    res.json({ order });
   } catch (err) {
     res.status(400).json({ error: "Could not assign rider", detail: err.message });
   }
@@ -272,7 +273,7 @@ router.put("/admin/:id/assign-partner", requireAuth, requireAdmin, async (req, r
       });
     }
 
-    res.json({ order);
+    res.json({ order });
   } catch (err) {
     res.status(400).json({ error: "Could not assign partner", detail: err.message });
   }
@@ -297,9 +298,10 @@ router.put("/admin/:id/assign", requireAuth, requireAdmin, async (req, res) => {
     }
 
     // If riderId is provided, validate rider exists
+    let riderForNote = null;
     if (riderId) {
-      const rider = await User.findOne({ _id: riderId, role: "RIDER" });
-      if (!rider) return res.status(404).json({ error: "Rider not found" });
+      riderForNote = await User.findOne({ _id: riderId, role: "RIDER" });
+      if (!riderForNote) return res.status(404).json({ error: "Rider not found" });
     }
 
     const order = await Order.findById(orderId);
@@ -316,11 +318,11 @@ router.put("/admin/:id/assign", requireAuth, requireAdmin, async (req, res) => {
       await advanceOrderStatus(order, "PICKUP_ASSIGNED", {
         userId: req.user.id,
         role: "ADMIN",
-        note: `Rider assigned: ${riderId ? (await User.findById(riderId)).name : "Unassigned"}`,
+        note: `Rider assigned: ${riderForNote ? riderForNote.name : "Unassigned"}`,
       });
     }
 
-    res.json({ order);
+    res.json({ order });
   } catch (err) {
     res.status(400).json({ error: "Could not assign rider", detail: err.message });
   }
