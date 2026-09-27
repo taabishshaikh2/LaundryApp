@@ -40,7 +40,7 @@ export default function NewOrder() {
 
   const selectedService = services.find((s) => s._id === serviceId);
 
-  // Helper to get base price for a garment based on service and priority
+  // Helper to get base price for a garment based on service code and priority
   const getBasePrice = (garment) => {
     if (!selectedService) return 0;
     switch (selectedService.code) {
@@ -133,39 +133,43 @@ export default function NewOrder() {
 
           <h3 className="text-xs uppercase text-gray-400 font-semibold mb-2">Speed</h3>
           <div className="flex gap-3 mb-6">
-            {/* Washing and Dry Cleaning only have Standard delivery */}
-            {selectedService &&
-              (selectedService.code === "WASHING" || selectedService.code === "DRY_CLEANING") && (
-              <button
-                onClick={() => setPriority("REGULAR")}
-                className={`flex-1 rounded-xl border p-3 text-left ${
-                  priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
-                }`}
-                disabled={true}
-              >
-                <div className="font-semibold">Standard 24-48hr delivery</div>
-              </button>
-            )}
-
-            {/* Ironing has both Standard and Express options */}
-            {selectedService && selectedService.code === "IRONING" && (
+            {/* Determine service type to show appropriate delivery options */}
+            {selectedService && (
               <>
-                <button
-                  onClick={() => setPriority("REGULAR")}
-                  className={`flex-1 rounded-xl border p-3 text-left ${
-                    priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
-                  }`}
-                >
-                  <div className="font-semibold">Standard 24-48hr delivery</div>
-                </button>
-                <button
-                  onClick={() => setPriority("PRIORITY")}
-                  className={`flex-1 rounded-xl border p-3 text-left ${
-                    priority === "PRIORITY" ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white"
-                  }`}
-                >
-                  <div className="font-semibold">Express 1hr delivery</div>
-                </button>
+                {/* Washing and Dry Cleaning only have Standard delivery */}
+                {(selectedService.code === "WASHING" || selectedService.code === "DRY_CLEANING") && (
+                  <button
+                    onClick={() => setPriority("REGULAR")}
+                    className={`flex-1 rounded-xl border p-3 text-left ${
+                      priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
+                    }`}
+                    disabled={true}
+                  >
+                    <div className="font-semibold">Standard 24-48hr delivery</div>
+                  </button>
+                )}
+
+                {/* Ironing has both Standard and Express options */}
+                {selectedService.code === "IRONING" && (
+                  <>
+                    <button
+                      onClick={() => setPriority("REGULAR")}
+                      className={`flex-1 rounded-xl border p-3 text-left ${
+                        priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
+                      }`}
+                    >
+                      <div className="font-semibold">Standard 24-48hr delivery</div>
+                    </button>
+                    <button
+                      onClick={() => setPriority("PRIORITY")}
+                      className={`flex-1 rounded-xl border p-3 text-left ${
+                        priority === "PRIORITY" ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white"
+                      }`}
+                    >
+                      <div className="font-semibold">Express 1hr delivery</div>
+                    </button>
+                  </>
+                )}
               </>
             )}
           </div>
