@@ -175,7 +175,7 @@ export default function NewOrder() {
                 ))}
               </div>
             </div>
-          )))
+          ))}
 
           <button
             disabled={selectedItems.length === 0 || !serviceId}
