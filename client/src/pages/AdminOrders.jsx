@@ -145,7 +145,7 @@ export default function AdminOrders() {
           <>
             {/* Desktop Table - Hidden on mobile */}
             <div className="hidden lg:block border rounded-card overflow-hidden bg-white">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[calc(100vh-200px)] overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 text-left">
                     <tr>
@@ -192,7 +192,7 @@ export default function AdminOrders() {
                             <div className="space-y-2">
                               <label className="text-xs text-gray-600 block mb-1">Assign Rider</label>
                               <select
-                                value={riderSelection.get(o._id) || ""}
+                                value={o.riderId?._id || riderSelection.get(o._id) || ""}
                                 disabled={updatingId === o._id}
                                 onChange={(e) => {
                                   setRiderSelection(prev => new Map(prev).set(o._id, e.target.value));
@@ -244,9 +244,7 @@ export default function AdminOrders() {
                                 const deliveryMethod = deliveryMethodSelection.get(o._id);
                                 if (riderId) {
                                   assignRiderWithMethod(o._id, riderId, deliveryMethod || "STANDARD");
-                                  // Clear selections after assignment
-                                  riderSelection.delete(o._id);
-                                  deliveryMethodSelection.delete(o._id);
+                                  // Keep selection after assignment to show assigned rider
                                 } else {
                                   showError("Please select a rider");
                                 }
@@ -384,7 +382,7 @@ export default function AdminOrders() {
                       <div>
                         <label className="text-xs text-gray-600 block mb-1">Assign Rider</label>
                         <select
-                          value={o.riderId?._id || ""}
+                          value={o.riderId?._id || riderSelection.get(o._id) || ""}
                           disabled={updatingId === o._id}
                           onChange={(e) => {
                             setRiderSelection(prev => new Map(prev).set(o._id, e.target.value));
@@ -453,9 +451,7 @@ export default function AdminOrders() {
                           const deliveryMethod = deliveryMethodSelection.get(o._id);
                           if (riderId) {
                             assignRiderWithMethod(o._id, riderId, deliveryMethod);
-                            // Clear selections after assignment
-                            riderSelection.delete(o._id);
-                            deliveryMethodSelection.delete(o._id);
+                            // Keep selection after assignment to show assigned rider
                           } else {
                             showError("Please select a rider");
                           }
