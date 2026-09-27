@@ -88,8 +88,8 @@ router.post("/", requireAuth, async (req, res) => {
       };
     });
 
-    const gstAmount = Math.round((subtotal * GST_PERCENT) / 100);
-    const total = subtotal + gstAmount;
+    const gstAmount = Math.round(subtotal * GST_PERCENT) / 100; // e.g. 25 × 18% = 4.5, not rounded to 5
+    const total = Math.round((subtotal + gstAmount) * 100) / 100;
 
     const order = await Order.create({
       userId: req.user.id,
