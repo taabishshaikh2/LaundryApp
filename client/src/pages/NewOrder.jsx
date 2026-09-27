@@ -77,7 +77,7 @@ export default function NewOrder() {
     }));
 
   const subtotal = selectedItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
-  const gstAmount = Math.round((subtotal * GST_PERCENT) / 100);
+  const gstAmount = (subtotal * GST_PERCENT) / 100;
   const total = subtotal + gstAmount;
 
   function updateQty(id, delta) {
