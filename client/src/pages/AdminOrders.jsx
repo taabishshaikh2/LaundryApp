@@ -28,6 +28,9 @@ export default function AdminOrders() {
   const [updatingId, setUpdatingId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  // Temporary selections for rider and delivery method during assignment
+  const [riderSelection, setRiderSelection] = useState(new Map());
+  const [deliveryMethodSelection, setDeliveryMethodSelection] = useState(new Map());
 
   async function load() {
     try {
@@ -63,11 +66,10 @@ export default function AdminOrders() {
     }
   }
 
-  async function assignRider(orderId, riderId) {
-    if (!riderId) return;
+  async function assignRiderWithMethod(orderId, riderId, deliveryMethod) {
     setUpdatingId(orderId);
     try {
-      await api.put(`/orders/admin/${orderId}/assign-rider`, { riderId });
+      await api.put(`/orders/admin/${orderId}/assign`, { riderId, deliveryMethod });
       showSuccess("Rider assigned");
       await load();
     } catch (err) {
@@ -154,6 +156,7 @@ export default function AdminOrders() {
                       <th className="p-3 font-semibold">Total</th>
                       <th className="p-3 font-semibold">Status</th>
                       <th className="p-3 font-semibold">Rider</th>
+                      <th className="p-3 font-semibold">Delivery Method</th>
                       <th className="p-3 font-semibold">Partner</th>
                       <th className="p-3 font-semibold">History</th>
                     </tr>
@@ -186,19 +189,72 @@ export default function AdminOrders() {
                             </select>
                           </td>
                           <td className="p-3">
-                            <select
-                              value={o.riderId?._id || ""}
-                              disabled={updatingId === o._id}
-                              onChange={(e) => assignRider(o._id, e.target.value)}
-                              className="border rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-brand-500"
+                            <div className="space-y-2">
+                              <label className="text-xs text-gray-600 block mb-1">Assign Rider</label>
+                              <select
+                                value={riderSelection.get(o._id) || ""}
+                                disabled={updatingId === o._id}
+                                onChange={(e) => {
+                                  setRiderSelection(prev => new Map(prev).set(o._id, e.target.value));
+                                }}
+                                className="w-full border rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-brand-500"
+                              >
+                                <option value="">Unassigned</option>
+                                {riders.map((r) => (
+                                  <option key={r._id} value={r._id}>
+                                    {r.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-xs text-gray-600 block mb-1">Delivery Type</label>
+                              <div className="space-y-1">
+                                <label className="flex items-center space-x-2">
+                                  <input
+                                    type="radio"
+                                    value="STANDARD"
+                                    checked={deliveryMethodSelection.get(o._id) === "STANDARD"}
+                                    onChange={(e) => {
+                                      setDeliveryMethodSelection(prev => new Map(prev).set(o._id, e.target.value));
+                                    }}
+                                    className="h-4 w-4 text-brand-600"
+                                  />
+                                  <span className="text-xs">Standard (24-48 hours)</span>
+                                </label>
+                                <label className="flex items-center space-x-2">
+                                  <input
+                                    type="radio"
+                                    value="EXPRESS"
+                                    checked={deliveryMethodSelection.get(o._id) === "EXPRESS"}
+                                    onChange={(e) => {
+                                      setDeliveryMethodSelection(prev => new Map(prev).set(o._id, e.target.value));
+                                    }}
+                                    className="h-4 w-4 text-brand-600"
+                                  />
+                                  <span className="text-xs">Express (1 hour - Ironing only)</span>
+                                </label>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => {
+                                const riderId = riderSelection.get(o._id);
+                                const deliveryMethod = deliveryMethodSelection.get(o._id);
+                                if (riderId) {
+                                  assignRiderWithMethod(o._id, riderId, deliveryMethod || "STANDARD");
+                                  // Clear selections after assignment
+                                  riderSelection.delete(o._id);
+                                  deliveryMethodSelection.delete(o._id);
+                                } else {
+                                  showError("Please select a rider");
+                                }
+                              }}
+                              className="w-full text-center text-brand-600 text-sm font-medium py-1 hover:bg-brand-50 rounded-lg transition-smooth"
                             >
-                              <option value="">Unassigned</option>
-                              {riders.map((r) => (
-                                <option key={r._id} value={r._id}>
-                                  {r.name}
-                                </option>
-                              ))}
-                            </select>
+                              Assign Rider
+                            </button>
                           </td>
                           <td className="p-3">
                             <select
@@ -330,7 +386,9 @@ export default function AdminOrders() {
                         <select
                           value={o.riderId?._id || ""}
                           disabled={updatingId === o._id}
-                          onChange={(e) => assignRider(o._id, e.target.value)}
+                          onChange={(e) => {
+                            setRiderSelection(prev => new Map(prev).set(o._id, e.target.value));
+                          }}
                           className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500"
                         >
                           <option value="">Unassigned</option>
@@ -340,6 +398,36 @@ export default function AdminOrders() {
                             </option>
                           ))}
                         </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs text-gray-600 block mb-1">Delivery Type</label>
+                        <div className="space-y-1">
+                          <label className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              value="STANDARD"
+                              checked={deliveryMethodSelection.get(o._id) === "STANDARD"}
+                              onChange={(e) => {
+                                setDeliveryMethodSelection(prev => new Map(prev).set(o._id, e.target.value));
+                              }}
+                              className="h-4 w-4 text-brand-600"
+                            />
+                            <span className="text-xs">Standard (24-48 hours)</span>
+                          </label>
+                          <label className="flex items-center space-x-2">
+                            <input
+                              type="radio"
+                              value="EXPRESS"
+                              checked={deliveryMethodSelection.get(o._id) === "EXPRESS"}
+                              onChange={(e) => {
+                                setDeliveryMethodSelection(prev => new Map(prev).set(o._id, e.target.value));
+                              }}
+                              className="h-4 w-4 text-brand-600"
+                            />
+                            <span className="text-xs">Express (1 hour - Ironing only)</span>
+                          </label>
+                        </div>
                       </div>
 
                       <div>
@@ -360,10 +448,21 @@ export default function AdminOrders() {
                       </div>
 
                       <button
-                        onClick={() => setExpandedId(expandedId === o._id ? null : o._id)}
+                        onClick={() => {
+                          const riderId = riderSelection.get(o._id);
+                          const deliveryMethod = deliveryMethodSelection.get(o._id);
+                          if (riderId) {
+                            assignRiderWithMethod(o._id, riderId, deliveryMethod);
+                            // Clear selections after assignment
+                            riderSelection.delete(o._id);
+                            deliveryMethodSelection.delete(o._id);
+                          } else {
+                            showError("Please select a rider");
+                          }
+                        }}
                         className="w-full text-center text-brand-600 text-sm font-medium py-2 hover:bg-brand-50 rounded-lg transition-smooth"
                       >
-                        {expandedId === o._id ? "Hide History" : "View History"}
+                        Assign Rider & Set Delivery
                       </button>
                     </div>
 

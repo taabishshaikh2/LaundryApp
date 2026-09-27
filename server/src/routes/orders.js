@@ -118,6 +118,23 @@ router.post("/", requireAuth, async (req, res) => {
 
     // fire-and-forget: don't block the response on the notification write
     sendWhatsAppNotification(order, "ORDER_PLACED").catch(() => {});
+
+    // Notify admins of new order
+    try {
+      const admins = await User.find({ role: "ADMIN" });
+      const notificationPromises = admins.map(admin =>
+        Notification.create({
+          userId: admin._id,
+          title: "New Order Received",
+          message: `Order #${order._id.slice(-6).toUpperCase()} from ${req.user.name} has arrived.`,
+          type: "order_created",
+          orderId: order._id
+        })
+      );
+      await Promise.all(notificationPromises);
+    } catch (notifyError) {
+      console.error("Failed to create admin notifications:", notifyError);
+    }
   } catch (err) {
     res.status(400).json({ error: "Could not create order", detail: err.message });
   }
@@ -185,7 +202,7 @@ router.put("/admin/:id/status", requireAuth, requireAdmin, async (req, res) => {
 
     await advanceOrderStatus(order, status, { userId: req.user.id, role: "ADMIN", note });
 
-    res.json({ order });
+    res.json({ order);
   } catch (err) {
     res.status(400).json({ error: "Could not update order", detail: err.message });
   }
@@ -220,7 +237,7 @@ router.put("/admin/:id/assign-rider", requireAuth, requireAdmin, async (req, res
       });
     }
 
-    res.json({ order });
+    res.json({ order);
   } catch (err) {
     res.status(400).json({ error: "Could not assign rider", detail: err.message });
   }
@@ -255,9 +272,57 @@ router.put("/admin/:id/assign-partner", requireAuth, requireAdmin, async (req, r
       });
     }
 
-    res.json({ order });
+    res.json({ order);
   } catch (err) {
     res.status(400).json({ error: "Could not assign partner", detail: err.message });
+  }
+});
+
+// Assign rider and set delivery method (STANDARD/EXPRESS) - NEW
+router.put("/admin/:id/assign", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    // Sanitize the ID - remove any quotes or whitespace
+    const orderId = req.params.id.replace(/["'\s]/g, "");
+
+    // Validate it's a proper MongoDB ObjectId format
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ error: "Invalid order ID format" });
+    }
+
+    const { riderId, deliveryMethod } = req.body;
+
+    // Validate deliveryMethod
+    if (deliveryMethod && !["STANDARD", "EXPRESS"].includes(deliveryMethod)) {
+      return res.status(400).json({ error: "Invalid delivery method. Must be STANDARD or EXPRESS" });
+    }
+
+    // If riderId is provided, validate rider exists
+    if (riderId) {
+      const rider = await User.findOne({ _id: riderId, role: "RIDER" });
+      if (!rider) return res.status(404).json({ error: "Rider not found" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    // Update riderId and deliveryMethod
+    if (riderId !== undefined) order.riderId = riderId;
+    if (deliveryMethod !== undefined) order.deliveryMethod = deliveryMethod;
+
+    await order.save();
+
+    // If order was just placed and now has a rider, advance status to PICKUP_ASSIGNED
+    if (order.status === "ORDER_PLACED" && riderId) {
+      await advanceOrderStatus(order, "PICKUP_ASSIGNED", {
+        userId: req.user.id,
+        role: "ADMIN",
+        note: `Rider assigned: ${riderId ? (await User.findById(riderId)).name : "Unassigned"}`,
+      });
+    }
+
+    res.json({ order);
+  } catch (err) {
+    res.status(400).json({ error: "Could not assign rider", detail: err.message });
   }
 });
 

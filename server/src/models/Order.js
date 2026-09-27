@@ -70,6 +70,8 @@ const orderSchema = new mongoose.Schema(
     status: { type: String, enum: ORDER_STATUSES, default: "ORDER_PLACED" },
     statusHistory: [statusHistorySchema],
     notes: [noteSchema],
+    // Set by admin when assigning a rider: STANDARD or EXPRESS delivery
+    deliveryMethod: { type: String, enum: ["STANDARD", "EXPRESS"], default: null },
   },
   { timestamps: true }
 );

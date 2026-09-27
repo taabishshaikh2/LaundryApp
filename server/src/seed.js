@@ -8,24 +8,24 @@ import User from "./models/User.js";
 
 const garments = [
   // MEN
-  { category: "MEN", name: "Shirt", icon: "👔", priceRegular: 25 },
-  { category: "MEN", name: "T-Shirt", icon: "👕", priceRegular: 20 },
-  { category: "MEN", name: "Trousers", icon: "👖", priceRegular: 30 },
-  { category: "MEN", name: "Jeans", icon: "👖", priceRegular: 35 },
-  { category: "MEN", name: "Kurta-Pajama Set", icon: "🥻", priceRegular: 50 },
+  { category: "MEN", name: "Shirt", icon: "👔", washingPrice: 25, dryCleaningPrice: 45, ironingRegularPrice: 15, ironingExpressPrice: 30 },
+  { category: "MEN", name: "T-Shirt", icon: "👕", washingPrice: 20, dryCleaningPrice: 36, ironingRegularPrice: 12, ironingExpressPrice: 24 },
+  { category: "MEN", name: "Trousers", icon: "👖", washingPrice: 30, dryCleaningPrice: 54, ironingRegularPrice: 18, ironingExpressPrice: 36 },
+  { category: "MEN", name: "Jeans", icon: "👖", washingPrice: 35, dryCleaningPrice: 63, ironingRegularPrice: 21, ironingExpressPrice: 42 },
+  { category: "MEN", name: "Kurta-Pajama Set", icon: "🥻", washingPrice: 50, dryCleaningPrice: 90, ironingRegularPrice: 30, ironingExpressPrice: 60 },
   // WOMEN
-  { category: "WOMEN", name: "Top / Blouse", icon: "👚", priceRegular: 25 },
-  { category: "WOMEN", name: "Kurti", icon: "🥻", priceRegular: 30 },
-  { category: "WOMEN", name: "Saree", icon: "🥻", priceRegular: 60 },
-  { category: "WOMEN", name: "Salwar Suit Set", icon: "🥻", priceRegular: 55 },
+  { category: "WOMEN", name: "Top / Blouse", icon: "👚", washingPrice: 25, dryCleaningPrice: 45, ironingRegularPrice: 15, ironingExpressPrice: 30 },
+  { category: "WOMEN", name: "Kurti", icon: "🥻", washingPrice: 30, dryCleaningPrice: 54, ironingRegularPrice: 18, ironingExpressPrice: 36 },
+  { category: "WOMEN", name: "Saree", icon: "🥻", washingPrice: 60, dryCleaningPrice: 108, ironingRegularPrice: 36, ironingExpressPrice: 72 },
+  { category: "WOMEN", name: "Salwar Suit Set", icon: "🥻", washingPrice: 55, dryCleaningPrice: 99, ironingRegularPrice: 33, ironingExpressPrice: 66 },
   // KIDS
-  { category: "KIDS", name: "Kids Shirt/T-Shirt", icon: "👕", priceRegular: 15 },
-  { category: "KIDS", name: "School Uniform Set", icon: "🎒", priceRegular: 35 },
+  { category: "KIDS", name: "Kids Shirt/T-Shirt", icon: "👕", washingPrice: 15, dryCleaningPrice: 27, ironingRegularPrice: 9, ironingExpressPrice: 18 },
+  { category: "KIDS", name: "School Uniform Set", icon: "🎒", washingPrice: 35, dryCleaningPrice: 63, ironingRegularPrice: 21, ironingExpressPrice: 42 },
   // HOUSEHOLD
-  { category: "HOUSEHOLD", name: "Bedsheet (Single)", icon: "🛏️", priceRegular: 40 },
-  { category: "HOUSEHOLD", name: "Bedsheet (Double)", icon: "🛏️", priceRegular: 60 },
-  { category: "HOUSEHOLD", name: "Bath Towel", icon: "🛁", priceRegular: 20 },
-  { category: "HOUSEHOLD", name: "Curtain", icon: "🪟", priceRegular: 45 },
+  { category: "HOUSEHOLD", name: "Bedsheet (Single)", icon: "🛏️", washingPrice: 40, dryCleaningPrice: 72, ironingRegularPrice: 24, ironingExpressPrice: 48 },
+  { category: "HOUSEHOLD", name: "Bedsheet (Double)", icon: "🛏️", washingPrice: 60, dryCleaningPrice: 108, ironingRegularPrice: 36, ironingExpressPrice: 72 },
+  { category: "HOUSEHOLD", name: "Bath Towel", icon: "🛁", washingPrice: 20, dryCleaningPrice: 36, ironingRegularPrice: 12, ironingExpressPrice: 24 },
+  { category: "HOUSEHOLD", name: "Curtain", icon: "🪟", washingPrice: 45, dryCleaningPrice: 81, ironingRegularPrice: 27, ironingExpressPrice: 54 },
 ];
 
 async function run() {
@@ -37,9 +37,9 @@ async function run() {
   console.log(`Inserted ${garments.length} garments.`);
 
   const services = [
-    { name: "Washing", code: "WASHING", icon: "🧺", description: "Wash & fold, everyday laundry.", priceMultiplier: 1 },
-    { name: "Ironing", code: "IRONING", icon: "👔", description: "Pressing only, no wash.", priceMultiplier: 0.6 },
-    { name: "Dry Cleaning", code: "DRY_CLEANING", icon: "🧥", description: "For delicate and formal fabrics.", priceMultiplier: 1.8 },
+    { name: "Services", code: "WASHING", icon: "🧺", description: "Wash & fold, everyday laundry.", hasExpressOption: false },
+    { name: "Ironing", code: "IRONING", icon: "👔", description: "Pressing only, no wash.", hasExpressOption: true },
+    { name: "Dry Cleaning", code: "DRY_CLEANING", icon: "🧥", description: "For delicate and formal fabrics.", hasExpressOption: false },
   ];
   await Service.deleteMany({});
   await Service.insertMany(services);

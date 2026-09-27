@@ -14,7 +14,7 @@ export default function Nav() {
         <span>📦</span>Orders
       </NavLink>
       <NavLink to="/new-order" className={linkClass}>
-        <span>➕</span>Wash
+        <span>➕</span>Services
       </NavLink>
       <NavLink to="/profile" className={linkClass}>
         <span>👤</span>Profile
