@@ -11,7 +11,6 @@ const CATEGORY_LABELS = {
 };
 
 const GST_PERCENT = 18;
-const PRIORITY_MULTIPLIER = 1.3;
 
 export default function NewOrder() {
   const navigate = useNavigate();
@@ -40,18 +39,23 @@ export default function NewOrder() {
   }, []);
 
   const selectedService = services.find((s) => s._id === serviceId);
-  const serviceFactor = selectedService?.priceMultiplier ?? 1;
-  const priorityFactor = priority === "PRIORITY" ? PRIORITY_MULTIPLIER : 1;
-  const combinedFactor = serviceFactor * priorityFactor;
 
-  const grouped = useMemo(() => {
-    const map = {};
-    garments.forEach((g) => {
-      map[g.category] = map[g.category] || [];
-      map[g.category].push(g);
-    });
-    return map;
-  }, [garments]);
+  // Helper to get base price for a garment based on service and priority
+  const getBasePrice = (garment) => {
+    if (!selectedService) return 0;
+    switch (selectedService.code) {
+      case "WASHING":
+        return garment.washingPrice || 0;
+      case "DRY_CLEANING":
+        return garment.dryCleaningPrice || 0;
+      case "IRONING":
+        return priority === "PRIORITY"
+          ? garment.ironingExpressPrice || 0
+          : garment.ironingRegularPrice || 0;
+      default:
+        return 0;
+    }
+  };
 
   const selectedItems = garments
     .filter((g) => quantities[g._id] > 0)
@@ -59,7 +63,7 @@ export default function NewOrder() {
       garmentId: g._id,
       name: g.name,
       quantity: quantities[g._id],
-      unitPrice: Math.round(g.priceRegular * combinedFactor),
+      unitPrice: getBasePrice(g),
     }));
 
   const subtotal = selectedItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
@@ -129,22 +133,41 @@ export default function NewOrder() {
 
           <h3 className="text-xs uppercase text-gray-400 font-semibold mb-2">Speed</h3>
           <div className="flex gap-3 mb-6">
-            <button
-              onClick={() => setPriority("REGULAR")}
-              className={`flex-1 rounded-xl border p-3 text-left ${
-                priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
-              }`}
-            >
-              <div className="font-semibold">Standard 24-48hr delivery</div>
-            </button>
-            <button
-              onClick={() => setPriority("PRIORITY")}
-              className={`flex-1 rounded-xl border p-3 text-left ${
-                priority === "PRIORITY" ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white"
-              }`}
-            >
-              <div className="font-semibold">Express 1hr delivery</div>
-            </button>
+            {/* Washing and Dry Cleaning only have Standard delivery */}
+            {selectedService &&
+              (selectedService.code === "WASHING" || selectedService.code === "DRY_CLEANING") && (
+              <button
+                onClick={() => setPriority("REGULAR")}
+                className={`flex-1 rounded-xl border p-3 text-left ${
+                  priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
+                }`}
+                disabled={true}
+              >
+                <div className="font-semibold">Standard 24-48hr delivery</div>
+              </button>
+            )}
+
+            {/* Ironing has both Standard and Express options */}
+            {selectedService && selectedService.code === "IRONING" && (
+              <>
+                <button
+                  onClick={() => setPriority("REGULAR")}
+                  className={`flex-1 rounded-xl border p-3 text-left ${
+                    priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
+                  }`}
+                >
+                  <div className="font-semibold">Standard 24-48hr delivery</div>
+                </button>
+                <button
+                  onClick={() => setPriority("PRIORITY")}
+                  className={`flex-1 rounded-xl border p-3 text-left ${
+                    priority === "PRIORITY" ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white"
+                  }`}
+                >
+                  <div className="font-semibold">Express 1hr delivery</div>
+                </button>
+              </>
+            )}
           </div>
 
           {Object.entries(grouped).map(([category, items]) => (
@@ -155,7 +178,7 @@ export default function NewOrder() {
                   <div key={g._id} className="border rounded-xl p-3 bg-white">
                     <div className="text-2xl mb-1">{g.icon}</div>
                     <div className="font-medium text-sm">{g.name}</div>
-                    <div className="text-xs text-gray-400 mb-2">₹{Math.round(g.priceRegular * combinedFactor)}</div>
+                    <div className="text-xs text-gray-400 mb-2">₹{getBasePrice(g)}</div>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => updateQty(g._id, -1)}
