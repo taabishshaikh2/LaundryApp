@@ -72,6 +72,9 @@ export default function RiderDashboard() {
                 )}
               </div>
               <p className="text-xs uppercase text-brand-600 font-semibold mb-2">{o.status.replaceAll("_", " ")}</p>
+{o.deliveryMethod && (
+  <p className="text-xs text-gray-600">Delivery: {o.deliveryMethod}</p>
+)}
 
               {action && (
                 <button
