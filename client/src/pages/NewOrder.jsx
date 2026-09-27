@@ -40,6 +40,16 @@ export default function NewOrder() {
 
   const selectedService = services.find((s) => s._id === serviceId);
 
+  // Group garments by category for the item picker below.
+  const grouped = useMemo(() => {
+    const map = {};
+    garments.forEach((g) => {
+      map[g.category] = map[g.category] || [];
+      map[g.category].push(g);
+    });
+    return map;
+  }, [garments]);
+
   // Helper to get base price for a garment based on service code and priority
   const getBasePrice = (garment) => {
     if (!selectedService) return 0;
