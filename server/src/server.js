@@ -34,6 +34,7 @@ app.use("/api/rider", riderRoutes);
 app.use("/api/partner", partnerRoutes);
 app.use("/admin/settings", adminSettingsRouter);
 app.use("/admin/slots", slotsRouter);
+app.use("/api/slots", require("./src/routes/slotsPublic.js").default);
 // basic error handler
 app.use((err, req, res, next) => {
   console.error(err);
