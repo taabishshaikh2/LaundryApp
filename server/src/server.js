@@ -10,6 +10,9 @@ import orderRoutes from "./routes/orders.js";
 import adminRoutes from "./routes/admin.js";
 import riderRoutes from "./routes/rider.js";
 import partnerRoutes from "./routes/partner.js";
+import adminSettingsRouter from "./routes/adminSettings.js";
+import slotsRouter from "./routes/slots.js";
+
 
 const app = express();
 
@@ -29,7 +32,8 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/rider", riderRoutes);
 app.use("/api/partner", partnerRoutes);
-
+app.use("/admin/settings", adminSettingsRouter);
+app.use("/admin/slots", slotsRouter);
 // basic error handler
 app.use((err, req, res, next) => {
   console.error(err);
