@@ -277,7 +277,7 @@ export default function NewOrder() {
           </div>
 
           {/* Pickup slot selector — new */}
-          {!(serviceCode === "IRONING" && deliveryMethod === "EXPRESS") && (
+          {!(selectedService.code === "IRONING" && deliveryMethod === "EXPRESS") && (
             <div className="mt-4">
               <label>Pick a pickup slot</label>
               <select
