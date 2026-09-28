@@ -6,6 +6,7 @@ import Service from "../models/Service.js";
 import User from "../models/User.js";
 import LaundryPartner from "../models/LaundryPartner.js";
 import Notification from "../models/Notification.js";
+import Slot from "../models/Slot.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { advanceOrderStatus } from "../utils/orderStatus.js";
 import { sendWhatsAppNotification } from "../services/whatsapp.js";
@@ -37,7 +38,7 @@ function getGarmentPrice(garment, serviceCode, speed) {
 // Create order (customer)
 router.post("/", requireAuth, async (req, res) => {
   try {
-    const { address, speed, items, serviceId } = req.body;
+    const { address, speed, items, serviceId, pickupSlot, deliverySlot } = req.body;
     if (!address?.line1 || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "Address and at least one item are required" });
     }
@@ -99,6 +100,8 @@ router.post("/", requireAuth, async (req, res) => {
       serviceId: service._id,
       serviceName: service.name,
       serviceCode: service.code,
+      pickupSlot: pickupSlot || null,
+      deliverySlot: deliverySlot || null,
       items: orderItems,
       subtotal,
       gstAmount,
@@ -114,6 +117,15 @@ router.post("/", requireAuth, async (req, res) => {
         },
       ],
     });
+
+    // Book the slot(s) — increments how many orders are using that window
+    // so the admin/customer slot picker can respect capacity limits.
+    if (pickupSlot) {
+      await Slot.findByIdAndUpdate(pickupSlot, { $inc: { bookedCount: 1 } });
+    }
+    if (deliverySlot) {
+      await Slot.findByIdAndUpdate(deliverySlot, { $inc: { bookedCount: 1 } });
+    }
 
     res.status(201).json({ order });
 

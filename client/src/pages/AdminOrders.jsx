@@ -28,6 +28,9 @@ export default function AdminOrders() {
   const [updatingId, setUpdatingId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   // Temporary selections for rider and delivery method during assignment
   const [riderSelection, setRiderSelection] = useState(new Map());
   const [deliveryMethodSelection, setDeliveryMethodSelection] = useState(new Map());
@@ -93,6 +96,21 @@ export default function AdminOrders() {
     }
   }
 
+  function exportCSV() {
+    const rows = [
+      ["Order ID", "Customer", "Status", "Total"],
+      ...filteredOrders.map((o) => [o._id.slice(-6), o.userId?.name || "", o.status, o.total]),
+    ];
+    const csv = rows.map((r) => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "orders.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const getStatusVariant = (status) => {
     if (status === "DELIVERED") return "success";
     if (status === "CANCELLED") return "error";
@@ -101,13 +119,18 @@ export default function AdminOrders() {
   };
 
   const filteredOrders = orders.filter((o) => {
-    if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
-    return (
-      o._id.toLowerCase().includes(q) ||
-      o.userId?.name?.toLowerCase().includes(q) ||
-      o.userId?.phone?.includes(q)
-    );
+    const matchesSearch =
+      !searchQuery ||
+      [o._id, o.userId?.name, o.userId?.phone].some((v) => v?.toString().toLowerCase().includes(q));
+
+    const matchesStatus = !statusFilter || o.status === statusFilter;
+
+    const matchesDate =
+      (!startDate || new Date(o.createdAt) >= new Date(startDate)) &&
+      (!endDate || new Date(o.createdAt) <= new Date(endDate));
+
+    return matchesSearch && matchesStatus && matchesDate;
   });
 
   if (loading) {
@@ -121,16 +144,50 @@ export default function AdminOrders() {
   return (
     <AdminLayout title="Orders">
       <div className="animate-fade-in space-y-4">
-        {/* Search Bar */}
-        <div className="relative">
+        {/* Search & Filter Bar */}
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="relative flex-1 min-w-[220px]">
+            <input
+              type="text"
+              placeholder="Search by order ID, customer name or phone..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-3 pr-10 rounded-card border border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-smooth"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+          </div>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-3 py-3 rounded-card border border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-smooth text-sm"
+          >
+            <option value="">All Statuses</option>
+            {STATUS_LIST.map((s) => (
+              <option key={s} value={s}>{s.replaceAll("_", " ")}</option>
+            ))}
+          </select>
+
           <input
-            type="text"
-            placeholder="Search by order ID, customer name or phone..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-4 py-3 pr-10 rounded-card border border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-smooth"
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="px-3 py-3 rounded-card border border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-smooth text-sm"
           />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="px-3 py-3 rounded-card border border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-smooth text-sm"
+          />
+
+          <button
+            onClick={exportCSV}
+            disabled={filteredOrders.length === 0}
+            className="px-4 py-3 bg-brand-600 text-white rounded-card text-sm font-medium disabled:opacity-50 transition-smooth"
+          >
+            Export CSV
+          </button>
         </div>
 
         {filteredOrders.length === 0 ? (

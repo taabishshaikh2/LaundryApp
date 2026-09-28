@@ -27,6 +27,20 @@ export default function NewOrder() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // Slot selector state.
+  // NOTE: verify this endpoint — /admin/slots is almost certainly admin-only
+  // (requireAuth + requireAdmin) like every other /admin/* route in this app,
+  // which will 403 for real customers. This should hit a public read route
+  // (e.g. GET /api/slots) mirroring how /api/garments and /api/services work
+  // separately from their /api/admin/garments and /api/admin/services CRUD
+  // counterparts. Swap the URL below once that route exists.
+  const [slots, setSlots] = useState([]);
+  const [selectedSlot, setSelectedSlot] = useState("");
+
+  useEffect(() => {
+    api.get("/slots").then((r) => setSlots(r.data.slots)).catch(() => setSlots([]));
+  }, []);
+
   useEffect(() => {
     api.get("/garments").then((res) => setGarments(res.data.garments));
     api.get("/services").then((res) => {
@@ -59,7 +73,7 @@ export default function NewOrder() {
       case "DRY_CLEANING":
         return garment.dryCleaningPrice || 0;
       case "IRONING":
-        return priority === "PRIORITY"
+        return priority === "EXPRESS"
           ? garment.ironingExpressPrice || 0
           : garment.ironingRegularPrice || 0;
       default:
@@ -77,8 +91,8 @@ export default function NewOrder() {
     }));
 
   const subtotal = selectedItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
-const gstAmount = Math.round(subtotal * GST_PERCENT) / 100;   // 25 × 18% = 4.5, not rounded to 5
-const total = Math.round((subtotal + gstAmount) * 100) / 100;
+  const gstAmount = Math.round(subtotal * GST_PERCENT) / 100; // 25 × 18% = 4.5, not rounded to 5
+  const total = Math.round((subtotal + gstAmount) * 100) / 100;
 
   function updateQty(id, delta) {
     setQuantities((q) => ({ ...q, [id]: Math.max(0, (q[id] || 0) + delta) }));
@@ -90,8 +104,9 @@ const total = Math.round((subtotal + gstAmount) * 100) / 100;
     try {
       const res = await api.post("/orders", {
         address,
-        priority,
+        speed: priority,
         serviceId,
+        pickupSlot: selectedSlot || undefined,
         items: selectedItems.map((i) => ({
           garmentId: i.garmentId,
           quantity: i.quantity,
@@ -119,7 +134,7 @@ const total = Math.round((subtotal + gstAmount) * 100) / 100;
         <p className="text-sm text-gray-500 flex-1">
           Step {step} of 2 · {step === 1 ? "Select service & items" : "Cart"}
         </p>
-        {total > 0 && <span className="text-sm font-semibold bg-gray-100 rounded-full px-3 py-1">₹{total}</span>}
+        {total > 0 && <span className="text-sm font-semibold bg-gray-100 rounded-full px-3 py-1">₹{total.toFixed(2)}</span>}
       </div>
 
       {step === 1 && (
@@ -171,9 +186,9 @@ const total = Math.round((subtotal + gstAmount) * 100) / 100;
                       <div className="font-semibold">Standard 24-48hr delivery</div>
                     </button>
                     <button
-                      onClick={() => setPriority("PRIORITY")}
+                      onClick={() => setPriority("EXPRESS")}
                       className={`flex-1 rounded-xl border p-3 text-left ${
-                        priority === "PRIORITY" ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white"
+                        priority === "EXPRESS" ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white"
                       }`}
                     >
                       <div className="font-semibold">Express 1hr delivery</div>
@@ -227,7 +242,7 @@ const total = Math.round((subtotal + gstAmount) * 100) / 100;
       {step === 2 && (
         <div className="max-w-md">
           <div className="border rounded-xl p-4 mb-4 bg-white">
-            <p className="font-semibold mb-1">{selectedService?.icon} {selectedService?.name} · {priority === "PRIORITY" ? "Express 1hr delivery" : "Standard 24-48hr delivery"}</p>
+            <p className="font-semibold mb-1">{selectedService?.icon} {selectedService?.name} · {priority === "EXPRESS" ? "Express 1hr delivery" : "Standard 24-48hr delivery"}</p>
             <div className="border-t my-2" />
             <p className="font-semibold mb-3">Your items</p>
             {selectedItems.map((i) => (
@@ -237,13 +252,13 @@ const total = Math.round((subtotal + gstAmount) * 100) / 100;
               </div>
             ))}
             <div className="border-t mt-2 pt-2 text-sm flex justify-between">
-              <span>Subtotal</span><span>₹{subtotal}</span>
+              <span>Subtotal</span><span>₹{subtotal.toFixed(2)}</span>
             </div>
             <div className="text-sm flex justify-between">
-              <span>GST ({GST_PERCENT}%)</span><span>₹{gstAmount}</span>
+              <span>GST ({GST_PERCENT}%)</span><span>₹{gstAmount.toFixed(2)}</span>
             </div>
             <div className="font-bold flex justify-between mt-1">
-              <span>Total</span><span>₹{total}</span>
+              <span>Total</span><span>₹{total.toFixed(2)}</span>
             </div>
           </div>
 
@@ -261,6 +276,23 @@ const total = Math.round((subtotal + gstAmount) * 100) / 100;
               onChange={(e) => setAddress((a) => ({ ...a, landmark: e.target.value }))}
               className="w-full border rounded-lg px-3 py-2"
             />
+          </div>
+
+          {/* Pickup slot selector — new */}
+          <div className="border rounded-xl p-4 mb-4 bg-white">
+            <p className="font-semibold mb-3">Pickup slot</p>
+            <select
+              value={selectedSlot}
+              onChange={(e) => setSelectedSlot(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2"
+            >
+              <option value="">– None –</option>
+              {slots.map((s) => (
+                <option key={s._id} value={s._id}>
+                  {new Date(s.date).toLocaleDateString()} {s.timeRange} (max {s.maxOrders})
+                </option>
+              ))}
+            </select>
           </div>
 
           {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
