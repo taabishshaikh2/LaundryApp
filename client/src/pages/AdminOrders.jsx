@@ -265,7 +265,7 @@ export default function AdminOrders() {
                               </select>
                             </div>
 
-                            <div className="space-y-2">
+                            {/* <div className="space-y-2">
                               <label className="text-xs text-gray-600 block mb-1">Delivery Type</label>
                               <div className="space-y-1">
                                 <label className="flex items-center space-x-2">
@@ -293,7 +293,7 @@ export default function AdminOrders() {
                                   <span className="text-xs">Express (1 hour - Ironing only)</span>
                                 </label>
                               </div>
-                            </div>
+                            </div> */}
 
                             <button
                               onClick={() => {
@@ -310,6 +310,11 @@ export default function AdminOrders() {
                             >
                               Assign Rider
                             </button>
+                          </td>
+                          <td className="p-3">
+                            <Badge variant={o.deliveryMethod === "EXPRESS" ? "warning" : "info"}>
+                              {o.deliveryMethod === "EXPRESS" ? "Express" : "Standard"}
+                            </Badge>
                           </td>
                           <td className="p-3">
                             <select

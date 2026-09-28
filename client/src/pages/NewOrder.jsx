@@ -36,6 +36,8 @@ export default function NewOrder() {
   // counterparts. Swap the URL below once that route exists.
   const [slots, setSlots] = useState([]);
   const [selectedSlot, setSelectedSlot] = useState("");
+  const [deliveryMethod, setDeliveryMethod] = useState("STANDARD");
+  // ← you probably already have `serviceCode` or similar – ensure you set this when a service is chosen
 
   useEffect(() => {
     api.get("/slots").then((r) => setSlots(r.data.slots)).catch(() => setSlots([]));
@@ -145,9 +147,8 @@ export default function NewOrder() {
               <button
                 key={s._id}
                 onClick={() => setServiceId(s._id)}
-                className={`rounded-xl border p-4 text-left ${
-                  serviceId === s._id ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
-                }`}
+                className={`rounded-xl border p-4 text-left ${serviceId === s._id ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
+                  }`}
               >
                 <div className="text-2xl mb-1">{s.icon}</div>
                 <div className="font-semibold">{s.name}</div>
@@ -165,9 +166,8 @@ export default function NewOrder() {
                 {(selectedService.code === "WASHING" || selectedService.code === "DRY_CLEANING") && (
                   <button
                     onClick={() => setPriority("REGULAR")}
-                    className={`flex-1 rounded-xl border p-3 text-left ${
-                      priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
-                    }`}
+                    className={`flex-1 rounded-xl border p-3 text-left ${priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
+                      }`}
                     disabled={true}
                   >
                     <div className="font-semibold">Standard 24-48hr delivery</div>
@@ -179,17 +179,15 @@ export default function NewOrder() {
                   <>
                     <button
                       onClick={() => setPriority("REGULAR")}
-                      className={`flex-1 rounded-xl border p-3 text-left ${
-                        priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
-                      }`}
+                      className={`flex-1 rounded-xl border p-3 text-left ${priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
+                        }`}
                     >
                       <div className="font-semibold">Standard 24-48hr delivery</div>
                     </button>
                     <button
                       onClick={() => setPriority("EXPRESS")}
-                      className={`flex-1 rounded-xl border p-3 text-left ${
-                        priority === "EXPRESS" ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white"
-                      }`}
+                      className={`flex-1 rounded-xl border p-3 text-left ${priority === "EXPRESS" ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white"
+                        }`}
                     >
                       <div className="font-semibold">Express 1hr delivery</div>
                     </button>
@@ -279,21 +277,22 @@ export default function NewOrder() {
           </div>
 
           {/* Pickup slot selector — new */}
-          <div className="border rounded-xl p-4 mb-4 bg-white">
-            <p className="font-semibold mb-3">Pickup slot</p>
-            <select
-              value={selectedSlot}
-              onChange={(e) => setSelectedSlot(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2"
-            >
-              <option value="">– None –</option>
-              {slots.map((s) => (
-                <option key={s._id} value={s._id}>
-                  {new Date(s.date).toLocaleDateString()} {s.timeRange} (max {s.maxOrders})
-                </option>
-              ))}
-            </select>
-          </div>
+          {!(serviceCode === "IRONING" && deliveryMethod === "EXPRESS") && (
+            <div className="mt-4">
+              <label>Pick a pickup slot</label>
+              <select
+                value={selectedSlot}
+                onChange={e => setSelectedSlot(e.target.value)}
+              >
+                <option value="">–None–</option>
+                {slots.map(s => (
+                  <option key={s._id} value={s._id}>
+                    {new Date(s.date).toLocaleDateString()} {s.timeRange} (max {s.maxOrders})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
 
