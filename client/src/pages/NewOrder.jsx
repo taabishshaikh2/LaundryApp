@@ -17,46 +17,54 @@ export default function NewOrder() {
   const [searchParams] = useSearchParams();
   const preselectedServiceId = searchParams.get("service");
 
+  /* ------------------------------------------------------------------ */
+  /*                        State declarations                        */
+  /* ------------------------------------------------------------------ */
   const [garments, setGarments] = useState([]);
   const [services, setServices] = useState([]);
   const [serviceId, setServiceId] = useState(preselectedServiceId || "");
   const [quantities, setQuantities] = useState({});
-  const [priority, setPriority] = useState("REGULAR");
+  const [priority, setPriority] = useState("REGULAR"); // REGULAR | EXPRESS
   const [step, setStep] = useState(1);
   const [address, setAddress] = useState({ label: "Home", line1: "", landmark: "" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // Slot selector state.
-  // NOTE: verify this endpoint — /admin/slots is almost certainly admin-only
-  // (requireAuth + requireAdmin) like every other /admin/* route in this app,
-  // which will 403 for real customers. This should hit a public read route
-  // (e.g. GET /api/slots) mirroring how /api/garments and /api/services work
-  // separately from their /api/admin/garments and /api/admin/services CRUD
-  // counterparts. Swap the URL below once that route exists.
+  /* ------------------------------------------------------------------ */
+  /*                        Slots – public API                        */
+  /* ------------------------------------------------------------------ */
   const [slots, setSlots] = useState([]);
   const [selectedSlot, setSelectedSlot] = useState("");
-  const [deliveryMethod, setDeliveryMethod] = useState("STANDARD");
-  // ← you probably already have `serviceCode` or similar – ensure you set this when a service is chosen
 
   useEffect(() => {
-    api.get("/slots").then((r) => setSlots(r.data.slots)).catch(() => setSlots([]));
+    api
+      .get("/api/slots")
+      .then((r) => setSlots(r.data.slots))
+      .catch(() => setSlots([]));
   }, []);
 
+  /* ------------------------------------------------------------------ */
+  /*                        Load data – garments / services             */
+  /* ------------------------------------------------------------------ */
   useEffect(() => {
     api.get("/garments").then((res) => setGarments(res.data.garments));
-    api.get("/services").then((res) => {
-      setServices(res.data.services);
-      if (!preselectedServiceId && res.data.services.length > 0) {
-        setServiceId(res.data.services[0]._id);
-      }
-    });
+    api
+      .get("/services")
+      .then((res) => {
+        setServices(res.data.services);
+        if (!preselectedServiceId && res.data.services.length > 0) {
+          setServiceId(res.data.services[0]._id);
+        }
+      })
+      .catch(console.error);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const selectedService = services.find((s) => s._id === serviceId);
 
-  // Group garments by category for the item picker below.
+  /* ------------------------------------------------------------------ */
+  /*                        Helpers – price / items                       */
+  /* ------------------------------------------------------------------ */
   const grouped = useMemo(() => {
     const map = {};
     garments.forEach((g) => {
@@ -66,7 +74,6 @@ export default function NewOrder() {
     return map;
   }, [garments]);
 
-  // Helper to get base price for a garment based on service code and priority
   const getBasePrice = (garment) => {
     if (!selectedService) return 0;
     switch (selectedService.code) {
@@ -93,9 +100,12 @@ export default function NewOrder() {
     }));
 
   const subtotal = selectedItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
-  const gstAmount = Math.round(subtotal * GST_PERCENT) / 100; // 25 × 18% = 4.5, not rounded to 5
+  const gstAmount = Math.round(subtotal * GST_PERCENT) / 100;
   const total = Math.round((subtotal + gstAmount) * 100) / 100;
 
+  /* ------------------------------------------------------------------ */
+  /*                        UI helpers                                    */
+  /* ------------------------------------------------------------------ */
   function updateQty(id, delta) {
     setQuantities((q) => ({ ...q, [id]: Math.max(0, (q[id] || 0) + delta) }));
   }
@@ -123,6 +133,9 @@ export default function NewOrder() {
     }
   }
 
+  /* ------------------------------------------------------------------ */
+  /*                        Render                                          */
+  /* ------------------------------------------------------------------ */
   return (
     <Layout title="New order" hideMobileNav>
       <div className="flex items-center gap-3 mb-4">
@@ -136,9 +149,16 @@ export default function NewOrder() {
         <p className="text-sm text-gray-500 flex-1">
           Step {step} of 2 · {step === 1 ? "Select service & items" : "Cart"}
         </p>
-        {total > 0 && <span className="text-sm font-semibold bg-gray-100 rounded-full px-3 py-1">₹{total.toFixed(2)}</span>}
+        {total > 0 && (
+          <span className="text-sm font-semibold bg-gray-100 rounded-full px-3 py-1">
+            ₹{total.toFixed(2)}
+          </span>
+        )}
       </div>
 
+      {/* ------------------------------------------------------------------
+           STEP 1 – Service & Items
+      ------------------------------------------------------------------- */}
       {step === 1 && (
         <>
           <h3 className="text-xs uppercase text-gray-400 font-semibold mb-2">Laundry service</h3>
@@ -147,8 +167,9 @@ export default function NewOrder() {
               <button
                 key={s._id}
                 onClick={() => setServiceId(s._id)}
-                className={`rounded-xl border p-4 text-left ${serviceId === s._id ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
-                  }`}
+                className={`rounded-xl border p-4 text-left ${
+                  serviceId === s._id ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
+                }`}
               >
                 <div className="text-2xl mb-1">{s.icon}</div>
                 <div className="font-semibold">{s.name}</div>
@@ -159,35 +180,38 @@ export default function NewOrder() {
 
           <h3 className="text-xs uppercase text-gray-400 font-semibold mb-2">Speed</h3>
           <div className="flex gap-3 mb-6">
-            {/* Determine service type to show appropriate delivery options */}
             {selectedService && (
               <>
-                {/* Washing and Dry Cleaning only have Standard delivery */}
-                {(selectedService.code === "WASHING" || selectedService.code === "DRY_CLEANING") && (
+                {/* Washing & Dry Cleaning – only Standard */}
+                {(selectedService.code === "WASHING" ||
+                  selectedService.code === "DRY_CLEANING") && (
                   <button
                     onClick={() => setPriority("REGULAR")}
-                    className={`flex-1 rounded-xl border p-3 text-left ${priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
-                      }`}
-                    disabled={true}
+                    className={`flex-1 rounded-xl border p-3 text-left ${
+                      priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
+                    }`}
+                    disabled
                   >
-                    <div className="font-semibold">Standard 24-48hr delivery</div>
+                    <div className="font-semibold">Standard 24‑48hr delivery</div>
                   </button>
                 )}
 
-                {/* Ironing has both Standard and Express options */}
+                {/* Ironing – Standard or Express */}
                 {selectedService.code === "IRONING" && (
                   <>
                     <button
                       onClick={() => setPriority("REGULAR")}
-                      className={`flex-1 rounded-xl border p-3 text-left ${priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
-                        }`}
+                      className={`flex-1 rounded-xl border p-3 text-left ${
+                        priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
+                      }`}
                     >
-                      <div className="font-semibold">Standard 24-48hr delivery</div>
+                      <div className="font-semibold">Standard 24‑48hr delivery</div>
                     </button>
                     <button
                       onClick={() => setPriority("EXPRESS")}
-                      className={`flex-1 rounded-xl border p-3 text-left ${priority === "EXPRESS" ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white"
-                        }`}
+                      className={`flex-1 rounded-xl border p-3 text-left ${
+                        priority === "EXPRESS" ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white"
+                      }`}
                     >
                       <div className="font-semibold">Express 1hr delivery</div>
                     </button>
@@ -197,9 +221,12 @@ export default function NewOrder() {
             )}
           </div>
 
+          {/* Item picker */}
           {Object.entries(grouped).map(([category, items]) => (
             <div key={category} className="mb-6">
-              <h3 className="text-xs uppercase text-gray-400 font-semibold mb-2">{CATEGORY_LABELS[category]}</h3>
+              <h3 className="text-xs uppercase text-gray-400 font-semibold mb-2">
+                {CATEGORY_LABELS[category]}
+              </h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
                 {items.map((g) => (
                   <div key={g._id} className="border rounded-xl p-3 bg-white">
@@ -237,10 +264,17 @@ export default function NewOrder() {
         </>
       )}
 
+      {/* ------------------------------------------------------------------
+           STEP 2 – Cart & pickup
+      ------------------------------------------------------------------- */}
       {step === 2 && (
         <div className="max-w-md">
+          {/* Order summary */}
           <div className="border rounded-xl p-4 mb-4 bg-white">
-            <p className="font-semibold mb-1">{selectedService?.icon} {selectedService?.name} · {priority === "EXPRESS" ? "Express 1hr delivery" : "Standard 24-48hr delivery"}</p>
+            <p className="font-semibold mb-1">
+              {selectedService?.icon} {selectedService?.name} ·{" "}
+              {priority === "EXPRESS" ? "Express 1hr delivery" : "Standard 24-48hr delivery"}
+            </p>
             <div className="border-t my-2" />
             <p className="font-semibold mb-3">Your items</p>
             {selectedItems.map((i) => (
@@ -250,16 +284,17 @@ export default function NewOrder() {
               </div>
             ))}
             <div className="border-t mt-2 pt-2 text-sm flex justify-between">
-              <span>Subtotal</span><span>₹{subtotal.toFixed(2)}</span>
+              <span>Subtotal</span> <span>₹{subtotal.toFixed(2)}</span>
             </div>
             <div className="text-sm flex justify-between">
-              <span>GST ({GST_PERCENT}%)</span><span>₹{gstAmount.toFixed(2)}</span>
+              <span>GST ({GST_PERCENT}%)</span> <span>₹{gstAmount.toFixed(2)}</span>
             </div>
             <div className="font-bold flex justify-between mt-1">
-              <span>Total</span><span>₹{total.toFixed(2)}</span>
+              <span>Total</span> <span>₹{total.toFixed(2)}</span>
             </div>
           </div>
 
+          {/* Address */}
           <div className="border rounded-xl p-4 mb-4 bg-white">
             <p className="font-semibold mb-3">Pickup address</p>
             <input
@@ -276,16 +311,19 @@ export default function NewOrder() {
             />
           </div>
 
-          {/* Pickup slot selector — new */}
-          {!(selectedService.code === "IRONING" && deliveryMethod === "EXPRESS") && (
+          {/* ----------------------------------------------
+               Slot selector – only show if not Express
+           ---------------------------------------------- */}
+          {!(selectedService?.code === "IRONING" && priority === "EXPRESS") && (
             <div className="mt-4">
               <label>Pick a pickup slot</label>
               <select
                 value={selectedSlot}
-                onChange={e => setSelectedSlot(e.target.value)}
+                onChange={(e) => setSelectedSlot(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 mt-1"
               >
                 <option value="">–None–</option>
-                {slots.map(s => (
+                {slots.map((s) => (
                   <option key={s._id} value={s._id}>
                     {new Date(s.date).toLocaleDateString()} {s.timeRange} (max {s.maxOrders})
                   </option>
