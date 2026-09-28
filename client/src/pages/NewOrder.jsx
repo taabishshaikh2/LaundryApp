@@ -35,12 +35,25 @@ export default function NewOrder() {
   /* ------------------------------------------------------------------ */
   const [slots, setSlots] = useState([]);
   const [selectedSlot, setSelectedSlot] = useState("");
+  const [slotsLoading, setSlotsLoading] = useState(true);
+  const [slotsError, setSlotsError] = useState("");
 
   useEffect(() => {
+    let active = true;
     api
-      .get("/api/slots")
-      .then((r) => setSlots(r.data.slots))
-      .catch(() => setSlots([]));
+      .get("/slots")
+      .then((r) => {
+        if (!Array.isArray(r.data.slots)) throw new Error("Invalid slots response");
+        if (active) setSlots(r.data.slots);
+      })
+      .catch(() => {
+        if (active) {
+          setSlots([]);
+          setSlotsError("Could not load pickup slots. Please refresh the page to try again.");
+        }
+      })
+      .finally(() => { if (active) setSlotsLoading(false); });
+    return () => { active = false; };
   }, []);
 
   /* ------------------------------------------------------------------ */
@@ -316,19 +329,23 @@ export default function NewOrder() {
            ---------------------------------------------- */}
           {!(selectedService?.code === "IRONING" && priority === "EXPRESS") && (
             <div className="mt-4">
-              <label>Pick a pickup slot</label>
+              <label htmlFor="pickup-slot">Pick a pickup slot</label>
               <select
+                id="pickup-slot"
+                disabled={slotsLoading || !!slotsError || slots.length === 0}
                 value={selectedSlot}
                 onChange={(e) => setSelectedSlot(e.target.value)}
                 className="w-full border rounded-lg px-3 py-2 mt-1"
               >
-                <option value="">–None–</option>
+                <option value="">{slotsLoading ? "Loading pickup slots…" : slotsError ? "Slots unavailable" : slots.length === 0 ? "No pickup slots available" : "Select a pickup slot"}</option>
                 {slots.map((s) => (
                   <option key={s._id} value={s._id}>
                     {new Date(s.date).toLocaleDateString()} {s.timeRange} (max {s.maxOrders})
                   </option>
                 ))}
               </select>
+              {slotsError && <p role="alert" className="text-red-600 text-sm mt-2">{slotsError}</p>}
+              {!slotsLoading && !slotsError && slots.length === 0 && <p className="text-gray-500 text-sm mt-2">No pickup slots have been scheduled yet.</p>}
             </div>
           )}
 

@@ -34,7 +34,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/rider", riderRoutes);
 app.use("/api/partner", partnerRoutes);
 app.use("/admin/settings", adminSettingsRouter);
-app.use("/admin/slots", slotsRouter);
+app.use(["/api/admin/slots", "/admin/slots"], slotsRouter);
 app.use("/api/slots", slotsPublicRouter);
 // basic error handler
 app.use((err, req, res, next) => {
