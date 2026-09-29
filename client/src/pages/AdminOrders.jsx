@@ -6,21 +6,12 @@ import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
 import Skeleton from "../components/ui/Skeleton";
 import EmptyState from "../components/ui/EmptyState";
-
-const STATUS_LIST = [
-  "ORDER_PLACED",
-  "PICKUP_ASSIGNED",
-  "RIDER_ON_THE_WAY",
-  "PICKED_UP",
-  "PROCESSING",
-  "READY",
-  "OUT_FOR_DELIVERY",
-  "DELIVERED",
-  "CANCELLED",
-];
-
+const STATUS_LIST = ["ORDER_PLACED", "PICKUP_ASSIGNED", "RIDER_ON_THE_WAY", "PICKED_UP", "PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
 export default function AdminOrders() {
-  const { showSuccess, showError } = useToast();
+  const {
+    showSuccess,
+    showError
+  } = useToast();
   const [orders, setOrders] = useState([]);
   const [riders, setRiders] = useState([]);
   const [partners, setPartners] = useState([]);
@@ -34,14 +25,9 @@ export default function AdminOrders() {
   // Temporary selections for rider and delivery method during assignment
   const [riderSelection, setRiderSelection] = useState(new Map());
   const [deliveryMethodSelection, setDeliveryMethodSelection] = useState(new Map());
-
   async function load() {
     try {
-      const [ordersRes, ridersRes, partnersRes] = await Promise.all([
-        api.get("/orders/admin/all"),
-        api.get("/admin/riders"),
-        api.get("/admin/laundry-partners"),
-      ]);
+      const [ordersRes, ridersRes, partnersRes] = await Promise.all([api.get("/orders/admin/all"), api.get("/admin/riders"), api.get("/admin/laundry-partners")]);
       setOrders(ordersRes.data.orders);
       setRiders(ridersRes.data.riders);
       setPartners(partnersRes.data.partners);
@@ -51,15 +37,15 @@ export default function AdminOrders() {
       setLoading(false);
     }
   }
-
   useEffect(() => {
     load();
   }, []);
-
   async function updateStatus(orderId, status) {
     setUpdatingId(orderId);
     try {
-      await api.put(`/orders/admin/${orderId}/status`, { status });
+      await api.put(`/orders/admin/${orderId}/status`, {
+        status
+      });
       showSuccess("Status updated");
       await load();
     } catch (err) {
@@ -68,11 +54,13 @@ export default function AdminOrders() {
       setUpdatingId(null);
     }
   }
-
   async function assignRiderWithMethod(orderId, riderId, deliveryMethod) {
     setUpdatingId(orderId);
     try {
-      await api.put(`/orders/admin/${orderId}/assign`, { riderId, deliveryMethod });
+      await api.put(`/orders/admin/${orderId}/assign`, {
+        riderId,
+        deliveryMethod
+      });
       showSuccess("Rider assigned");
       await load();
     } catch (err) {
@@ -81,12 +69,13 @@ export default function AdminOrders() {
       setUpdatingId(null);
     }
   }
-
   async function assignPartner(orderId, partnerId) {
     if (!partnerId) return;
     setUpdatingId(orderId);
     try {
-      await api.put(`/orders/admin/${orderId}/assign-partner`, { partnerId });
+      await api.put(`/orders/admin/${orderId}/assign-partner`, {
+        partnerId
+      });
       showSuccess("Partner assigned");
       await load();
     } catch (err) {
@@ -95,14 +84,12 @@ export default function AdminOrders() {
       setUpdatingId(null);
     }
   }
-
   function exportCSV() {
-    const rows = [
-      ["Order ID", "Customer", "Status", "Total"],
-      ...filteredOrders.map((o) => [o._id.slice(-6), o.userId?.name || "", o.status, o.total]),
-    ];
-    const csv = rows.map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
+    const rows = [["Order ID", "Customer", "Status", "Total"], ...filteredOrders.map(o => [o._id.slice(-6), o.userId?.name || "", o.status, o.total])];
+    const csv = rows.map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], {
+      type: "text/csv"
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -110,96 +97,49 @@ export default function AdminOrders() {
     a.click();
     URL.revokeObjectURL(url);
   }
-
-  const getStatusVariant = (status) => {
+  const getStatusVariant = status => {
     if (status === "DELIVERED") return "success";
     if (status === "CANCELLED") return "error";
     if (status === "ORDER_PLACED" || status === "PICKUP_ASSIGNED") return "warning";
     return "info";
   };
-
-  const filteredOrders = orders.filter((o) => {
+  const filteredOrders = orders.filter(o => {
     const q = searchQuery.toLowerCase();
-    const matchesSearch =
-      !searchQuery ||
-      [o._id, o.userId?.name, o.userId?.phone].some((v) => v?.toString().toLowerCase().includes(q));
-
+    const matchesSearch = !searchQuery || [o._id, o.userId?.name, o.userId?.phone].some(v => v?.toString().toLowerCase().includes(q));
     const matchesStatus = !statusFilter || o.status === statusFilter;
-
-    const matchesDate =
-      (!startDate || new Date(o.createdAt) >= new Date(startDate)) &&
-      (!endDate || new Date(o.createdAt) <= new Date(endDate));
-
+    const matchesDate = (!startDate || new Date(o.createdAt) >= new Date(startDate)) && (!endDate || new Date(o.createdAt) <= new Date(endDate));
     return matchesSearch && matchesStatus && matchesDate;
   });
-
   if (loading) {
-    return (
-      <AdminLayout title="Orders">
+    return <AdminLayout title="Orders">
         <Skeleton variant="card" count={3} />
-      </AdminLayout>
-    );
+      </AdminLayout>;
   }
-
-  return (
-    <AdminLayout title="Orders">
+  return <AdminLayout title="Orders">
       <div className="animate-fade-in space-y-4">
         {/* Search & Filter Bar */}
         <div className="flex flex-wrap items-end gap-3">
           <div className="relative flex-1 min-w-[220px]">
-            <input
-              type="text"
-              placeholder="Search by order ID, customer name or phone..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-3 pr-10 rounded-card border border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-smooth"
-            />
+            <input type="text" placeholder="Search by order ID, customer name or phone..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full px-4 py-3 pr-10 rounded-card border border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-smooth" />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
           </div>
 
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-3 rounded-card border border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-smooth text-sm"
-          >
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-3 py-3 rounded-card border border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-smooth text-sm">
             <option value="">All Statuses</option>
-            {STATUS_LIST.map((s) => (
-              <option key={s} value={s}>{s.replaceAll("_", " ")}</option>
-            ))}
+            {STATUS_LIST.map(s => <option key={s} value={s}>{s.replaceAll("_", " ")}</option>)}
           </select>
 
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="px-3 py-3 rounded-card border border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-smooth text-sm"
-          />
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="px-3 py-3 rounded-card border border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-smooth text-sm"
-          />
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="px-3 py-3 rounded-card border border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-smooth text-sm" />
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="px-3 py-3 rounded-card border border-gray-200 focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-smooth text-sm" />
 
-          <button
-            onClick={exportCSV}
-            disabled={filteredOrders.length === 0}
-            className="px-4 py-3 bg-brand-600 text-white rounded-card text-sm font-medium disabled:opacity-50 transition-smooth"
-          >
+          <button onClick={exportCSV} disabled={filteredOrders.length === 0} className="px-4 py-3 bg-brand-600 text-white rounded-card text-sm font-medium disabled:opacity-50 transition-smooth">
             Export CSV
           </button>
         </div>
 
-        {filteredOrders.length === 0 ? (
-          <Card>
-            <EmptyState
-              icon="📦"
-              title="No orders found"
-              description={searchQuery ? "Try a different search" : "No orders yet"}
-            />
-          </Card>
-        ) : (
-          <>
+        {filteredOrders.length === 0 ? <Card>
+            <EmptyState icon="📦" title="No orders found" description={searchQuery ? "Try a different search" : "No orders yet"} />
+          </Card> : <>
             {/* Desktop Table - Hidden on mobile */}
             <div className="hidden lg:block border rounded-card overflow-hidden bg-white">
               <div className="overflow-x-auto max-h-[calc(100vh-200px)] overflow-y-auto">
@@ -219,8 +159,7 @@ export default function AdminOrders() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredOrders.map((o) => (
-                      <React.Fragment key={o._id}>
+                    {filteredOrders.map(o => <React.Fragment key={o._id}>
                         <tr className="border-t hover:bg-gray-50">
                           <td className="p-3 font-medium">#{o._id.slice(-6).toUpperCase()}</td>
                           <td className="p-3">
@@ -232,36 +171,22 @@ export default function AdminOrders() {
                           <td className="p-3">{o.items.length}</td>
                           <td className="p-3 font-semibold">₹{o.total}</td>
                           <td className="p-3">
-                            <select
-                              value={o.status}
-                              disabled={updatingId === o._id}
-                              onChange={(e) => updateStatus(o._id, e.target.value)}
-                              className="border rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-brand-500"
-                            >
-                              {STATUS_LIST.map((s) => (
-                                <option key={s} value={s}>
+                            <select value={o.status} disabled={updatingId === o._id} onChange={e => updateStatus(o._id, e.target.value)} className="border rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-brand-500">
+                              {STATUS_LIST.map(s => <option key={s} value={s}>
                                   {s.replaceAll("_", " ")}
-                                </option>
-                              ))}
+                                </option>)}
                             </select>
                           </td>
                           <td className="p-3">
                             <div className="space-y-2">
                               <label className="text-xs text-gray-600 block mb-1">Assign Rider</label>
-                              <select
-                                value={o.riderId?._id || riderSelection.get(o._id) || ""}
-                                disabled={updatingId === o._id}
-                                onChange={(e) => {
-                                  setRiderSelection(prev => new Map(prev).set(o._id, e.target.value));
-                                }}
-                                className="w-full border rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-brand-500"
-                              >
+                              <select value={o.riderId?._id || riderSelection.get(o._id) || ""} disabled={updatingId === o._id} onChange={e => {
+                          setRiderSelection(prev => new Map(prev).set(o._id, e.target.value));
+                        }} className="w-full border rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-brand-500">
                                 <option value="">Unassigned</option>
-                                {riders.map((r) => (
-                                  <option key={r._id} value={r._id}>
+                                {riders.map(r => <option key={r._id} value={r._id}>
                                     {r.name}
-                                  </option>
-                                ))}
+                                  </option>)}
                               </select>
                             </div>
 
@@ -293,21 +218,18 @@ export default function AdminOrders() {
                                   <span className="text-xs">Express (1 hour - Ironing only)</span>
                                 </label>
                               </div>
-                            </div> */}
+                             </div> */}
 
-                            <button
-                              onClick={() => {
-                                const riderId = riderSelection.get(o._id);
-                                const deliveryMethod = deliveryMethodSelection.get(o._id);
-                                if (riderId) {
-                                  assignRiderWithMethod(o._id, riderId, deliveryMethod || "STANDARD");
-                                  // Keep selection after assignment to show assigned rider
-                                } else {
-                                  showError("Please select a rider");
-                                }
-                              }}
-                              className="w-full text-center text-brand-600 text-sm font-medium py-1 hover:bg-brand-50 rounded-lg transition-smooth"
-                            >
+                            <button onClick={() => {
+                        const riderId = riderSelection.get(o._id);
+                        const deliveryMethod = deliveryMethodSelection.get(o._id);
+                        if (riderId) {
+                          assignRiderWithMethod(o._id, riderId, deliveryMethod || "STANDARD");
+                          // Keep selection after assignment to show assigned rider
+                        } else {
+                          showError("Please select a rider");
+                        }
+                      }} className="w-full text-center text-brand-600 text-sm font-medium py-1 hover:bg-brand-50 rounded-lg transition-smooth">
                               Assign Rider
                             </button>
                           </td>
@@ -317,38 +239,30 @@ export default function AdminOrders() {
                             </Badge>
                           </td>
                           <td className="p-3">
-                            <select
-                              value={o.partnerId?._id || ""}
-                              disabled={updatingId === o._id}
-                              onChange={(e) => assignPartner(o._id, e.target.value)}
-                              className="border rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-brand-500"
-                            >
+                            <select value={o.partnerId?._id || ""} disabled={updatingId === o._id} onChange={e => assignPartner(o._id, e.target.value)} className="border rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-brand-500">
                               <option value="">Unassigned</option>
-                              {partners.map((p) => (
-                                <option key={p._id} value={p._id}>
+                              {partners.map(p => <option key={p._id} value={p._id}>
                                   {p.businessName}
-                                </option>
-                              ))}
+                                </option>)}
                             </select>
                           </td>
                           <td className="p-3">
-                            <button
-                              onClick={() => setExpandedId(expandedId === o._id ? null : o._id)}
-                              className="text-brand-600 text-xs underline hover:text-brand-700"
-                            >
+                            <button onClick={() => setExpandedId(expandedId === o._id ? null : o._id)} className="text-brand-600 text-xs underline hover:text-brand-700">
                               {expandedId === o._id ? "Hide" : "View"}
                             </button>
                           </td>
                         </tr>
-                        {expandedId === o._id && (
-                          <tr className="border-t bg-gray-50">
+                        {expandedId === o._id && <tr className="border-t bg-gray-50">
                             <td colSpan={9} className="p-4">
                               <p className="font-semibold text-xs uppercase text-gray-500 mb-2">
                                 Status history
                               </p>
+                              <p className="text-sm mb-4">
+                                <strong>Pickup:</strong>{" "}
+                                {o.pickupSlot ? `${new Date(o.pickupSlot.date).toLocaleDateString("en-IN")} · ${o.pickupSlot.timeRange}` : o.speed === "EXPRESS" ? "Express pickup" : "No slot recorded"}
+                              </p>
                               <ul className="space-y-1 text-sm mb-4">
-                                {o.statusHistory.map((h, idx) => (
-                                  <li key={idx} className="flex justify-between gap-4">
+                                {o.statusHistory.map((h, idx) => <li key={idx} className="flex justify-between gap-4">
                                     <span>
                                       {h.previousStatus ? h.previousStatus.replaceAll("_", " ") : "—"} →{" "}
                                       <strong>{h.newStatus.replaceAll("_", " ")}</strong> ({h.changedByRole})
@@ -356,31 +270,24 @@ export default function AdminOrders() {
                                     <span className="text-gray-500 text-xs whitespace-nowrap">
                                       {new Date(h.timestamp).toLocaleString()}
                                     </span>
-                                  </li>
-                                ))}
+                                  </li>)}
                               </ul>
-                              {o.notes?.length > 0 && (
-                                <>
+                              {o.notes?.length > 0 && <>
                                   <p className="font-semibold text-xs uppercase text-gray-500 mb-2">Notes</p>
                                   <ul className="space-y-1 text-sm">
-                                    {o.notes.map((n, idx) => (
-                                      <li key={idx} className="flex justify-between gap-4">
+                                    {o.notes.map((n, idx) => <li key={idx} className="flex justify-between gap-4">
                                         <span>
                                           📝 {n.text} <span className="text-gray-500">({n.addedByRole})</span>
                                         </span>
                                         <span className="text-gray-500 text-xs whitespace-nowrap">
                                           {new Date(n.timestamp).toLocaleString()}
                                         </span>
-                                      </li>
-                                    ))}
+                                      </li>)}
                                   </ul>
-                                </>
-                              )}
+                                </>}
                             </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    ))}
+                          </tr>}
+                      </React.Fragment>)}
                   </tbody>
                 </table>
               </div>
@@ -388,8 +295,7 @@ export default function AdminOrders() {
 
             {/* Mobile Cards - Shown on mobile */}
             <div className="lg:hidden space-y-3">
-              {filteredOrders.map((o) => (
-                <Card key={o._id} variant="default" padding="default">
+              {filteredOrders.map(o => <Card key={o._id} variant="default" padding="default">
                   <div className="space-y-3">
                     {/* Header */}
                     <div className="flex items-start justify-between">
@@ -421,42 +327,32 @@ export default function AdminOrders() {
                         <p className="text-xs text-gray-500">Date</p>
                         <p className="font-medium text-xs">{new Date(o.createdAt).toLocaleDateString()}</p>
                       </div>
+                      <div className="col-span-2">
+                        <p className="text-xs text-gray-500">Pickup</p>
+                        <p className="font-medium text-xs">{o.pickupSlot ? `${new Date(o.pickupSlot.date).toLocaleDateString("en-IN")} · ${o.pickupSlot.timeRange}` : o.speed === "EXPRESS" ? "Express pickup" : "No slot recorded"}</p>
+                      </div>
                     </div>
 
                     {/* Actions */}
                     <div className="space-y-2 pt-2 border-t border-gray-100">
                       <div>
                         <label className="text-xs text-gray-600 block mb-1">Update Status</label>
-                        <select
-                          value={o.status}
-                          disabled={updatingId === o._id}
-                          onChange={(e) => updateStatus(o._id, e.target.value)}
-                          className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500"
-                        >
-                          {STATUS_LIST.map((s) => (
-                            <option key={s} value={s}>
+                        <select value={o.status} disabled={updatingId === o._id} onChange={e => updateStatus(o._id, e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500">
+                          {STATUS_LIST.map(s => <option key={s} value={s}>
                               {s.replaceAll("_", " ")}
-                            </option>
-                          ))}
+                            </option>)}
                         </select>
                       </div>
 
                       <div>
                         <label className="text-xs text-gray-600 block mb-1">Assign Rider</label>
-                        <select
-                          value={o.riderId?._id || riderSelection.get(o._id) || ""}
-                          disabled={updatingId === o._id}
-                          onChange={(e) => {
-                            setRiderSelection(prev => new Map(prev).set(o._id, e.target.value));
-                          }}
-                          className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500"
-                        >
+                        <select value={o.riderId?._id || riderSelection.get(o._id) || ""} disabled={updatingId === o._id} onChange={e => {
+                    setRiderSelection(prev => new Map(prev).set(o._id, e.target.value));
+                  }} className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500">
                           <option value="">Unassigned</option>
-                          {riders.map((r) => (
-                            <option key={r._id} value={r._id}>
+                          {riders.map(r => <option key={r._id} value={r._id}>
                               {r.name}
-                            </option>
-                          ))}
+                            </option>)}
                         </select>
                       </div>
 
@@ -464,27 +360,15 @@ export default function AdminOrders() {
                         <label className="text-xs text-gray-600 block mb-1">Delivery Type</label>
                         <div className="space-y-1">
                           <label className="flex items-center space-x-2">
-                            <input
-                              type="radio"
-                              value="STANDARD"
-                              checked={deliveryMethodSelection.get(o._id) === "STANDARD"}
-                              onChange={(e) => {
-                                setDeliveryMethodSelection(prev => new Map(prev).set(o._id, e.target.value));
-                              }}
-                              className="h-4 w-4 text-brand-600"
-                            />
+                            <input type="radio" value="STANDARD" checked={deliveryMethodSelection.get(o._id) === "STANDARD"} onChange={e => {
+                        setDeliveryMethodSelection(prev => new Map(prev).set(o._id, e.target.value));
+                      }} className="h-4 w-4 text-brand-600" />
                             <span className="text-xs">Standard (24-48 hours)</span>
                           </label>
                           <label className="flex items-center space-x-2">
-                            <input
-                              type="radio"
-                              value="EXPRESS"
-                              checked={deliveryMethodSelection.get(o._id) === "EXPRESS"}
-                              onChange={(e) => {
-                                setDeliveryMethodSelection(prev => new Map(prev).set(o._id, e.target.value));
-                              }}
-                              className="h-4 w-4 text-brand-600"
-                            />
+                            <input type="radio" value="EXPRESS" checked={deliveryMethodSelection.get(o._id) === "EXPRESS"} onChange={e => {
+                        setDeliveryMethodSelection(prev => new Map(prev).set(o._id, e.target.value));
+                      }} className="h-4 w-4 text-brand-600" />
                             <span className="text-xs">Express (1 hour - Ironing only)</span>
                           </label>
                         </div>
@@ -492,46 +376,34 @@ export default function AdminOrders() {
 
                       <div>
                         <label className="text-xs text-gray-600 block mb-1">Assign Partner</label>
-                        <select
-                          value={o.partnerId?._id || ""}
-                          disabled={updatingId === o._id}
-                          onChange={(e) => assignPartner(o._id, e.target.value)}
-                          className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500"
-                        >
+                        <select value={o.partnerId?._id || ""} disabled={updatingId === o._id} onChange={e => assignPartner(o._id, e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500">
                           <option value="">Unassigned</option>
-                          {partners.map((p) => (
-                            <option key={p._id} value={p._id}>
+                          {partners.map(p => <option key={p._id} value={p._id}>
                               {p.businessName}
-                            </option>
-                          ))}
+                            </option>)}
                         </select>
                       </div>
 
-                      <button
-                        onClick={() => {
-                          const riderId = riderSelection.get(o._id);
-                          const deliveryMethod = deliveryMethodSelection.get(o._id);
-                          if (riderId) {
-                            assignRiderWithMethod(o._id, riderId, deliveryMethod);
-                            // Keep selection after assignment to show assigned rider
-                          } else {
-                            showError("Please select a rider");
-                          }
-                        }}
-                        className="w-full text-center text-brand-600 text-sm font-medium py-2 hover:bg-brand-50 rounded-lg transition-smooth"
-                      >
+                      <button onClick={() => {
+                  const riderId = riderSelection.get(o._id);
+                  const deliveryMethod = deliveryMethodSelection.get(o._id);
+                  if (riderId) {
+                    assignRiderWithMethod(o._id, riderId, deliveryMethod);
+                    // Keep selection after assignment to show assigned rider
+                  } else {
+                    showError("Please select a rider");
+                  }
+                }} className="w-full text-center text-brand-600 text-sm font-medium py-2 hover:bg-brand-50 rounded-lg transition-smooth">
                         Assign Rider & Set Delivery
                       </button>
                     </div>
 
                     {/* Expanded History - Mobile */}
-                    {expandedId === o._id && (
-                      <div className="pt-3 border-t border-gray-100 space-y-3">
+                    {expandedId === o._id && <div className="pt-3 border-t border-gray-100 space-y-3">
                         <div>
                           <p className="font-semibold text-xs uppercase text-gray-500 mb-2">Status History</p>
                           <div className="space-y-2">
-                            {o.statusHistory.map((h, idx) => (
-                              <div key={idx} className="text-xs bg-gray-50 p-2 rounded">
+                            {o.statusHistory.map((h, idx) => <div key={idx} className="text-xs bg-gray-50 p-2 rounded">
                                 <p className="font-medium">
                                   {h.previousStatus ? h.previousStatus.replaceAll("_", " ") : "—"} →{" "}
                                   <strong>{h.newStatus.replaceAll("_", " ")}</strong>
@@ -539,35 +411,26 @@ export default function AdminOrders() {
                                 <p className="text-gray-500 mt-1">
                                   {h.changedByRole} • {new Date(h.timestamp).toLocaleString()}
                                 </p>
-                              </div>
-                            ))}
+                              </div>)}
                           </div>
                         </div>
 
-                        {o.notes?.length > 0 && (
-                          <div>
+                        {o.notes?.length > 0 && <div>
                             <p className="font-semibold text-xs uppercase text-gray-500 mb-2">Notes</p>
                             <div className="space-y-2">
-                              {o.notes.map((n, idx) => (
-                                <div key={idx} className="text-xs bg-gray-50 p-2 rounded">
+                              {o.notes.map((n, idx) => <div key={idx} className="text-xs bg-gray-50 p-2 rounded">
                                   <p>📝 {n.text}</p>
                                   <p className="text-gray-500 mt-1">
                                     {n.addedByRole} • {new Date(n.timestamp).toLocaleString()}
                                   </p>
-                                </div>
-                              ))}
+                                </div>)}
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                          </div>}
+                      </div>}
                   </div>
-                </Card>
-              ))}
+                </Card>)}
             </div>
-          </>
-        )}
+          </>}
       </div>
-    </AdminLayout>
-  );
+    </AdminLayout>;
 }

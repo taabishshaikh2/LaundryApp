@@ -6,11 +6,11 @@ import Service from "../models/Service.js";
 import User from "../models/User.js";
 import LaundryPartner from "../models/LaundryPartner.js";
 import Notification from "../models/Notification.js";
-import Slot from "../models/Slot.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { advanceOrderStatus } from "../utils/orderStatus.js";
 import { sendWhatsAppNotification } from "../services/whatsapp.js";
 import { getBusinessSettings } from "../config/businessSettings.js";
+import { releaseSlotReservation, reserveSlot, SlotBookingError } from "../utils/slotBooking.js";
 
 const router = express.Router();
 
@@ -107,7 +107,7 @@ router.post("/", requireAuth, async (req, res) => {
     const gstAmount = Math.round(subtotal * taxPercent) / 100;
     const total = Math.round((subtotal + gstAmount) * 100) / 100;
 
-    const order = await Order.create({
+    const orderData = {
       userId: req.user.id,
       address,
       speed: deliverySpeed,
@@ -134,15 +134,25 @@ router.post("/", requireAuth, async (req, res) => {
           timestamp: new Date(),
         },
       ],
-    });
+    };
 
-    // Book the slot(s) — increments how many orders are using that window
-    // so the admin/customer slot picker can respect capacity limits.
-    if (pickupSlot) {
-      await Slot.findByIdAndUpdate(pickupSlot, { $inc: { bookedCount: 1 } });
+    if (deliverySpeed !== "EXPRESS" && !pickupSlot) {
+      return res.status(400).json({ error: "Choose a pickup slot before placing your order", code: "PICKUP_SLOT_REQUIRED" });
     }
-    if (deliverySlot) {
-      await Slot.findByIdAndUpdate(deliverySlot, { $inc: { bookedCount: 1 } });
+    if (deliverySpeed === "EXPRESS" && pickupSlot) {
+      return res.status(400).json({ error: "Express ironing does not use a scheduled pickup slot", code: "SLOT_NOT_ALLOWED" });
+    }
+
+    const session = await mongoose.startSession();
+    let order;
+    try {
+      await session.withTransaction(async () => {
+        if (pickupSlot) await reserveSlot(pickupSlot, session);
+        if (deliverySlot && String(deliverySlot) !== String(pickupSlot)) await reserveSlot(deliverySlot, session);
+        [order] = await Order.create([orderData], { session });
+      });
+    } finally {
+      await session.endSession();
     }
 
     res.status(201).json({ order });
@@ -167,13 +177,20 @@ router.post("/", requireAuth, async (req, res) => {
       console.error("Failed to create admin notifications:", notifyError);
     }
   } catch (err) {
-    res.status(400).json({ error: "Could not create order", detail: err.message });
+    const status = err instanceof SlotBookingError ? err.statusCode : 400;
+    res.status(status).json({
+      error: err.publicMessage || "Could not create order",
+      code: err.code,
+      detail: err.message,
+    });
   }
 });
 
 // Customer's own orders
 router.get("/", requireAuth, async (req, res) => {
-  const orders = await Order.find({ userId: req.user.id }).sort({ createdAt: -1 });
+  const orders = await Order.find({ userId: req.user.id })
+    .sort({ createdAt: -1 })
+    .populate("pickupSlot", "date timeRange maxOrders bookedCount");
   res.json({ orders });
 });
 
@@ -188,7 +205,7 @@ router.get("/:id", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "Invalid order ID format" });
     }
 
-    const order = await Order.findById(orderId);
+    const order = await Order.findById(orderId).populate("pickupSlot", "date timeRange maxOrders bookedCount");
     if (!order) return res.status(404).json({ error: "Order not found" });
 
     if (String(order.userId) !== req.user.id && req.user.role !== "ADMIN") {
@@ -208,7 +225,8 @@ router.get("/admin/all", requireAuth, requireAdmin, async (req, res) => {
     .sort({ createdAt: -1 })
     .populate("userId", "name phone email")
     .populate("riderId", "name phone")
-    .populate("partnerId", "businessName phone");
+    .populate("partnerId", "businessName phone")
+    .populate("pickupSlot", "date timeRange maxOrders bookedCount");
   res.json({ orders });
 });
 
@@ -228,10 +246,47 @@ router.put("/admin/:id/status", requireAuth, requireAdmin, async (req, res) => {
       return res.status(400).json({ error: "Invalid status" });
     }
 
-    const order = await Order.findById(orderId);
-    if (!order) return res.status(404).json({ error: "Order not found" });
-
-    await advanceOrderStatus(order, status, { userId: req.user.id, role: "ADMIN", note });
+    let order;
+    let cancelledNow = false;
+    if (status === "CANCELLED") {
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
+          cancelledNow = false;
+          order = await Order.findById(orderId).session(session);
+          if (!order) return;
+          if (order.status === "CANCELLED") return;
+          if (order.status === "DELIVERED") throw new Error("Delivered orders cannot be cancelled");
+          const previousStatus = order.status;
+          order.status = "CANCELLED";
+          order.statusHistory.push({
+            previousStatus,
+            newStatus: "CANCELLED",
+            changedBy: req.user.id,
+            changedByRole: "ADMIN",
+            note,
+            timestamp: new Date(),
+          });
+          if (!order.slotReservationReleasedAt) {
+            await releaseSlotReservation(order.pickupSlot, session);
+            if (order.deliverySlot && String(order.deliverySlot) !== String(order.pickupSlot)) {
+              await releaseSlotReservation(order.deliverySlot, session);
+            }
+            order.slotReservationReleasedAt = new Date();
+          }
+          await order.save({ session });
+          cancelledNow = true;
+        });
+      } finally {
+        await session.endSession();
+      }
+      if (!order) return res.status(404).json({ error: "Order not found" });
+      if (cancelledNow) sendWhatsAppNotification(order, "CANCELLED").catch(() => {});
+    } else {
+      order = await Order.findById(orderId);
+      if (!order) return res.status(404).json({ error: "Order not found" });
+      await advanceOrderStatus(order, status, { userId: req.user.id, role: "ADMIN", note });
+    }
 
     res.json({ order });
   } catch (err) {

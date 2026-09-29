@@ -54,6 +54,7 @@ const orderSchema = new mongoose.Schema(
     partnerId: { type: mongoose.Schema.Types.ObjectId, ref: "LaundryPartner", default: null },
     pickupSlot: { type: mongoose.Schema.Types.ObjectId, ref: "Slot", default: null },
     deliverySlot: { type: mongoose.Schema.Types.ObjectId, ref: "Slot", default: null },
+    slotReservationReleasedAt: { type: Date, default: null },
     address: {
       label: String,
       line1: String,

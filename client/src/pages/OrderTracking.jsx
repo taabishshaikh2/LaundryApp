@@ -62,6 +62,14 @@ export default function OrderTracking() {
             {order.speed === "EXPRESS" ? "Express" : "Standard"}
           </Badge>
         </div>
+        {order.pickupSlot && <Card className="mb-5">
+            <p className="text-xs uppercase text-gray-500 font-semibold mb-1">Pickup time</p>
+            <p className="font-medium">{new Date(order.pickupSlot.date).toLocaleDateString("en-IN", {
+            weekday: "short",
+            day: "numeric",
+            month: "short"
+          })} · {order.pickupSlot.timeRange}</p>
+          </Card>}
 
         <div className="grid gap-5 md:grid-cols-2 md:gap-8">
           <Card variant="elevated">

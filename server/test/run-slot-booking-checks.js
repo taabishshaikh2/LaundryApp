@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import Slot from "../src/models/Slot.js";
+import { isSlotInFuture, reserveSlot, slotEndDateTime, startOfBusinessToday } from "../src/utils/slotBooking.js";
+assert.equal(startOfBusinessToday(new Date("2026-09-29T12:00:00Z")).toISOString(), "2026-09-29T00:00:00.000Z");
+const sample={date:new Date("2026-09-29T00:00:00.000Z"),timeRange:"09:00-11:00"};
+assert.equal(slotEndDateTime(sample).toISOString(), "2026-09-29T05:30:00.000Z");
+assert.equal(isSlotInFuture(sample,new Date("2026-09-29T05:00:00.000Z")),true);
+assert.equal(isSlotInFuture(sample,new Date("2026-09-29T06:00:00.000Z")),false);
+const originalFind=Slot.findById; const originalUpdate=Slot.findOneAndUpdate; let booked=0; const id="507f1f77bcf86cd799439011";
+Slot.findById=()=>({session:async()=>({_id:id,date:new Date("2099-10-02T00:00:00.000Z"),timeRange:"09:00-11:00"})});
+Slot.findOneAndUpdate=async()=>booked<1?(booked++,{_id:id}):null;
+const results=await Promise.allSettled([reserveSlot(id,{}),reserveSlot(id,{})]);
+assert.equal(results.filter(x=>x.status==="fulfilled").length,1);
+assert.equal(results.filter(x=>x.status==="rejected"&&x.reason.code==="SLOT_FULL").length,1);
+Slot.findById=originalFind; Slot.findOneAndUpdate=originalUpdate;
+console.log("Slot booking checks passed.");
