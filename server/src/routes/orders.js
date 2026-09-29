@@ -13,6 +13,7 @@ import { getBusinessSettings } from "../config/businessSettings.js";
 import { reserveSlot, SlotBookingError } from "../utils/slotBooking.js";
 import { actorDetails, handoverSummary, normalizeHandoverItems } from "../utils/handover.js";
 import { cancelOrder, REFUND_STATUSES } from "../utils/orderCancellation.js";
+import { buildPricingRevision, handoverHasDifferences, latestPricingRevision, pricingIsResolved } from "../utils/pricingRevision.js";
 
 const router = express.Router();
 
@@ -219,6 +220,41 @@ router.post("/:id/cancel", requireAuth, async (req, res) => {
   }
 });
 
+router.post("/:id/pricing-revision/respond", requireAuth, async (req, res) => {
+  try {
+    const orderId = req.params.id.replace(/["'\s]/g, "");
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ error: "Invalid order ID format" });
+    const order = await Order.findOne({ _id: orderId, userId: req.user.id });
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (order.status === "CANCELLED") return res.status(409).json({ error: "A cancelled order cannot approve a revised bill" });
+    if (order.status !== "PICKED_UP") return res.status(409).json({ error: "This revised bill can only be answered before processing starts" });
+    const revision = latestPricingRevision(order);
+    if (!revision || revision.status !== "PENDING_CUSTOMER") return res.status(409).json({ error: "There is no revised bill awaiting your response" });
+    if (new Date(revision.handoverUpdatedAt).getTime() < new Date(order.handover.lastUpdatedAt).getTime()) {
+      return res.status(409).json({ error: "The handover changed after this bill was prepared. Ask the admin for a new revision" });
+    }
+    const response = String(req.body.response || "").toUpperCase();
+    if (!["APPROVE", "REJECT"].includes(response)) return res.status(400).json({ error: "Choose approve or reject" });
+    const responseNote = String(req.body.note || "").trim().slice(0, 500);
+    if (response === "REJECT" && responseNote.length < 3) return res.status(400).json({ error: "Please explain why the revised bill is being rejected" });
+    const actor = await actorDetails(req.user.id, "CUSTOMER");
+    revision.status = response === "APPROVE" ? "APPROVED" : "REJECTED";
+    revision.respondedAt = new Date();
+    revision.responseNote = responseNote;
+    revision.auditTrail.push({ ...actor, action: revision.status, note: responseNote, timestamp: revision.respondedAt });
+    if (response === "APPROVE") {
+      order.subtotal = revision.revisedSubtotal;
+      order.gstAmount = revision.revisedTaxAmount;
+      order.total = revision.revisedTotal;
+      order.statusHistory.push({ previousStatus: order.status, newStatus: order.status, changedBy: req.user.id, changedByRole: "CUSTOMER", note: `Approved revised bill v${revision.version}: ₹${revision.revisedTotal}`, timestamp: revision.respondedAt });
+    }
+    await order.save();
+    res.json({ order });
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Could not record the pricing response" });
+  }
+});
+
 // Single order (owner or admin) - FIXED
 router.get("/:id", requireAuth, async (req, res) => {
   try {
@@ -298,6 +334,9 @@ router.put("/admin/:id/status", requireAuth, requireAdmin, async (req, res) => {
       if (["PICKED_UP", "PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"].includes(status) && !order.handover?.confirmedAt) {
         return res.status(409).json({ error: "Record and confirm the garment handover before moving this order beyond pickup" });
       }
+      if (["PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"].includes(status) && !pricingIsResolved(order)) {
+        return res.status(409).json({ error: "The received garment count changed. Customer approval of the latest revised bill is required before processing" });
+      }
       await advanceOrderStatus(order, status, { userId: req.user.id, role: "ADMIN", note });
     }
 
@@ -364,6 +403,41 @@ router.put("/admin/:id/refund", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+router.post("/admin/:id/pricing-revision", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const orderId = req.params.id.replace(/["'\s]/g, "");
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ error: "Invalid order ID format" });
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (order.status !== "PICKED_UP") return res.status(409).json({ error: "Revised bills can only be prepared after pickup and before processing" });
+    if (!handoverHasDifferences(order)) return res.status(409).json({ error: "Ordered and received quantities already match" });
+    const calculated = buildPricingRevision(order, req.body.lines);
+    const actor = await actorDetails(req.user.id, "ADMIN");
+    const version = (order.pricingRevisions?.length || 0) + 1;
+    order.pricingRevisions.push({
+      version,
+      status: "PENDING_CUSTOMER",
+      ...calculated,
+      originalSubtotal: order.subtotal,
+      originalTaxAmount: order.gstAmount,
+      originalTotal: order.total,
+      taxEnabled: order.taxEnabled,
+      taxLabel: order.taxLabel,
+      taxPercent: order.taxPercent,
+      note: String(req.body.note || "").trim().slice(0, 500),
+      handoverUpdatedAt: order.handover.lastUpdatedAt,
+      createdAt: new Date(),
+      createdBy: req.user.id,
+      createdByName: actor.changedByName,
+      auditTrail: [{ ...actor, action: "CREATED", note: String(req.body.note || "").trim().slice(0, 500), timestamp: new Date() }],
+    });
+    await order.save();
+    res.status(201).json({ order, revision: latestPricingRevision(order) });
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Could not create revised bill" });
+  }
+});
+
 // Assign a rider - FIXED
 router.put("/admin/:id/assign-rider", requireAuth, requireAdmin, async (req, res) => {
   try {
@@ -421,11 +495,13 @@ router.put("/admin/:id/assign-partner", requireAuth, requireAdmin, async (req, r
     await order.save();
 
     if (order.status === "PICKED_UP") {
-      await advanceOrderStatus(order, "PROCESSING", {
-        userId: req.user.id,
-        role: "ADMIN",
-        note: `Laundry partner assigned: ${partner.businessName}`,
-      });
+      if (pricingIsResolved(order)) {
+        await advanceOrderStatus(order, "PROCESSING", {
+          userId: req.user.id,
+          role: "ADMIN",
+          note: `Laundry partner assigned: ${partner.businessName}`,
+        });
+      }
     }
 
     res.json({ order });

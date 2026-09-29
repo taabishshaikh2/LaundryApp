@@ -93,6 +93,57 @@ const cancellationAuditSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const pricingLineSchema = new mongoose.Schema(
+  {
+    garmentId: { type: mongoose.Schema.Types.ObjectId, ref: "Garment", default: null },
+    name: { type: String, required: true, trim: true, maxlength: 100 },
+    orderedQuantity: { type: Number, min: 0, default: 0 },
+    receivedQuantity: { type: Number, min: 0, required: true },
+    unitPrice: { type: Number, min: 0, required: true },
+    lineTotal: { type: Number, min: 0, required: true },
+    reason: { type: String, trim: true, maxlength: 300, default: "" },
+  },
+  { _id: false }
+);
+
+const pricingAuditSchema = new mongoose.Schema(
+  {
+    action: { type: String, enum: ["CREATED", "APPROVED", "REJECTED"], required: true },
+    changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    changedByName: { type: String, required: true },
+    changedByRole: { type: String, required: true },
+    note: { type: String, default: "" },
+    timestamp: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
+const pricingRevisionSchema = new mongoose.Schema(
+  {
+    version: { type: Number, required: true, min: 1 },
+    status: { type: String, enum: ["PENDING_CUSTOMER", "APPROVED", "REJECTED"], default: "PENDING_CUSTOMER" },
+    lines: { type: [pricingLineSchema], default: [] },
+    originalSubtotal: { type: Number, required: true },
+    originalTaxAmount: { type: Number, required: true },
+    originalTotal: { type: Number, required: true },
+    revisedSubtotal: { type: Number, required: true },
+    revisedTaxAmount: { type: Number, required: true },
+    revisedTotal: { type: Number, required: true },
+    taxEnabled: { type: Boolean, required: true },
+    taxLabel: { type: String, required: true },
+    taxPercent: { type: Number, required: true },
+    note: { type: String, trim: true, maxlength: 500, default: "" },
+    handoverUpdatedAt: { type: Date, required: true },
+    createdAt: { type: Date, default: Date.now },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    createdByName: { type: String, required: true },
+    respondedAt: { type: Date, default: null },
+    responseNote: { type: String, trim: true, maxlength: 500, default: "" },
+    auditTrail: { type: [pricingAuditSchema], default: [] },
+  },
+  { _id: true }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -149,6 +200,7 @@ const orderSchema = new mongoose.Schema(
     },
     paymentStatus: { type: String, enum: ["UNPAID", "PAID", "REFUNDED", "PARTIALLY_REFUNDED"], default: "UNPAID" },
     paymentMethod: { type: String, default: "CASH_ON_DELIVERY" },
+    pricingRevisions: { type: [pricingRevisionSchema], default: [] },
     // Set by admin when assigning a rider: STANDARD or EXPRESS delivery
     deliveryMethod: { type: String, enum: ["STANDARD", "EXPRESS"], default: null },
   },

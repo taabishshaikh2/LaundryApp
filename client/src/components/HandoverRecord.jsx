@@ -70,6 +70,8 @@ export function HandoverEditor({ order, endpoint, onSaved, title = "Confirm garm
   const [error, setError] = useState("");
   useEffect(() => { setItems(initialItems(order)); setGeneralNotes(order.handover?.generalNotes || ""); }, [order._id, order.handover?.lastUpdatedAt]);
   const update = (index, field, value) => setItems((current) => current.map((item, i) => i === index ? { ...item, [field]: value } : item));
+  const addUnexpectedGarment = () => setItems((current) => [...current, { garmentId: null, name: "Unexpected garment", orderedQuantity: 0, receivedQuantity: 1, stainNotes: "", damageNotes: "", specialCareNotes: "", photos: [] }]);
+  const removeItem = (index) => setItems((current) => current.filter((_, i) => i !== index));
   async function addPhotos(index, files) {
     try {
       setError("");
@@ -90,7 +92,7 @@ export function HandoverEditor({ order, endpoint, onSaved, title = "Confirm garm
   return <section className="dg-handover-editor">
     <div className="dg-section-heading"><div><h3>{title}</h3><p className="dg-muted text-sm">Count every physical garment before confirming pickup.</p></div></div>
     {items.map((item, index) => <div className="dg-handover-item" key={`${item.name}-${index}`}>
-      <div className="flex justify-between gap-3 items-center"><strong>{item.name}</strong><span className="text-sm dg-muted">Ordered: {item.orderedQuantity}</span></div>
+      <div className="flex justify-between gap-3 items-center">{item.orderedQuantity === 0 ? <input aria-label="Unexpected garment name" value={item.name} onChange={(event) => update(index, "name", event.target.value)} /> : <strong>{item.name}</strong>}<span className="text-sm dg-muted">Ordered: {item.orderedQuantity}</span></div>
       <label>Quantity received<input type="number" min="0" max="200" value={item.receivedQuantity} onChange={(event) => update(index, "receivedQuantity", Number(event.target.value))} /></label>
       <div className="dg-form-grid">
         <label>Stain notes<textarea rows="2" value={item.stainNotes || ""} onChange={(event) => update(index, "stainNotes", event.target.value)} placeholder="Location and type of stain" /></label>
@@ -99,7 +101,9 @@ export function HandoverEditor({ order, endpoint, onSaved, title = "Confirm garm
       <label>Special-care notes<textarea rows="2" value={item.specialCareNotes || ""} onChange={(event) => update(index, "specialCareNotes", event.target.value)} placeholder="Customer instructions or fabric care" /></label>
       <label className="dg-photo-input">Optional photos (max 3)<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => { addPhotos(index, event.target.files); event.target.value = ""; }} /></label>
       {!!item.photos?.length && <div className="dg-photo-row">{item.photos.map((photo, photoIndex) => <div key={photoIndex}><img src={photo.dataUrl} alt="Garment preview" /><button type="button" onClick={() => update(index, "photos", item.photos.filter((_, i) => i !== photoIndex))}>Remove</button></div>)}</div>}
+      {item.orderedQuantity === 0 && <button type="button" className="dg-remove-line" onClick={() => removeItem(index)}>Remove unexpected garment</button>}
     </div>)}
+    <button type="button" className="dg-button dg-secondary" onClick={addUnexpectedGarment}>Add unexpected garment</button>
     <label>General pickup notes<textarea rows="3" value={generalNotes} onChange={(event) => setGeneralNotes(event.target.value)} placeholder="Bag count, packaging, customer confirmation…" /></label>
     {error && <div className="dg-error" role="alert">{error}</div>}
     <button className="dg-button" type="button" disabled={saving} onClick={save}>{saving ? "Saving…" : order.handover?.confirmedAt ? "Save handover changes" : "Confirm pickup handover"}</button>

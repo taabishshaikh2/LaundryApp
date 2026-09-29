@@ -8,6 +8,7 @@ import Badge from "../components/ui/Badge";
 import Skeleton from "../components/ui/Skeleton";
 import { HandoverDetails } from "../components/HandoverRecord";
 import { CancellationDetails, CustomerCancellation } from "../components/CancellationRecord";
+import { CustomerPricingApproval } from "../components/PricingRevision";
 const STATUS_FLOW = ["ORDER_PLACED", "PICKUP_ASSIGNED", "RIDER_ON_THE_WAY", "PICKED_UP", "PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"];
 export default function OrderTracking() {
   const {
@@ -132,6 +133,7 @@ export default function OrderTracking() {
           <h3 className="font-semibold text-gray-900 mb-4">Pickup handover</h3>
           <HandoverDetails handover={order.handover} />
         </Card>
+        <CustomerPricingApproval order={order} onSaved={setOrder} />
         <CustomerCancellation order={order} onSaved={setOrder} />
       </div>
     </Layout>;
