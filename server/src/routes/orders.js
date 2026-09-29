@@ -10,10 +10,9 @@ import Slot from "../models/Slot.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { advanceOrderStatus } from "../utils/orderStatus.js";
 import { sendWhatsAppNotification } from "../services/whatsapp.js";
+import { getBusinessSettings } from "../config/businessSettings.js";
 
 const router = express.Router();
-
-const GST_PERCENT = 18;
 
 // Helper: Get flat price for a garment based on service code and speed
 function getGarmentPrice(garment, serviceCode, speed) {
@@ -52,10 +51,14 @@ router.post("/", requireAuth, async (req, res) => {
     }
 
     const deliverySpeed = speed || "REGULAR";
+    const settings = await getBusinessSettings();
 
     // Validate speed: EXPRESS only allowed for Ironing
     if (deliverySpeed === "EXPRESS" && service.code !== "IRONING") {
       return res.status(400).json({ error: "Express delivery is only available for Ironing service" });
+    }
+    if (deliverySpeed === "EXPRESS" && !settings.EXPRESS_IRONING_ENABLED) {
+      return res.status(400).json({ error: "Express ironing is not currently available" });
     }
 
     const garmentIds = items.map((i) => i.garmentId);
@@ -90,7 +93,18 @@ router.post("/", requireAuth, async (req, res) => {
       };
     });
 
-    const gstAmount = Math.round(subtotal * GST_PERCENT) / 100; // e.g. 25 × 18% = 4.5, not rounded to 5
+    const minimumOrder = deliverySpeed === "EXPRESS" ? settings.EXPRESS_MIN_ORDER : settings.REGULAR_MIN_ORDER;
+    if (subtotal < minimumOrder) {
+      return res.status(400).json({
+        error: `Minimum order for ${deliverySpeed === "EXPRESS" ? "express" : "standard"} service is ₹${minimumOrder}`,
+        code: "MINIMUM_ORDER_NOT_MET",
+        minimumOrder,
+        subtotal,
+      });
+    }
+    const taxEnabled = settings.TAX_ENABLED;
+    const taxPercent = taxEnabled ? settings.TAX_PERCENT : 0;
+    const gstAmount = Math.round(subtotal * taxPercent) / 100;
     const total = Math.round((subtotal + gstAmount) * 100) / 100;
 
     const order = await Order.create({
@@ -104,7 +118,11 @@ router.post("/", requireAuth, async (req, res) => {
       deliverySlot: deliverySlot || null,
       items: orderItems,
       subtotal,
+      taxEnabled,
+      taxLabel: settings.TAX_LABEL,
+      taxPercent,
       gstAmount,
+      minimumOrder,
       total,
       status: "ORDER_PLACED",
       statusHistory: [

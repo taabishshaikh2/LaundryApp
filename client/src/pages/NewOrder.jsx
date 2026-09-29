@@ -10,6 +10,14 @@ const categories = {
   HOUSEHOLD: "Household"
 };
 const money = n => `₹${Number(n).toFixed(2)}`;
+const DEFAULT_CONFIG = {
+  TAX_ENABLED: true,
+  TAX_LABEL: "GST",
+  TAX_PERCENT: 18,
+  REGULAR_MIN_ORDER: 199,
+  EXPRESS_MIN_ORDER: 249,
+  EXPRESS_IRONING_ENABLED: true
+};
 export default function NewOrder() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -33,15 +41,20 @@ export default function NewOrder() {
   const [slotsError, setSlotsError] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [config, setConfig] = useState(DEFAULT_CONFIG);
   const heading = useRef(null);
   async function load() {
     setLoading(true);
     setError("");
     try {
-      const [g, s] = await Promise.all([api.get("/garments"), api.get("/services")]);
+      const [g, s, businessConfig] = await Promise.all([api.get("/garments"), api.get("/services"), api.get("/config")]);
       const available = s.data.services.filter(x => x.active !== false);
       setGarments(g.data.garments);
       setServices(available);
+      setConfig({
+        ...DEFAULT_CONFIG,
+        ...businessConfig.data.settings
+      });
       setServiceId(current => available.some(x => x._id === current) ? current : available[0]?._id || "");
     } catch {
       setError("Could not load services and garments. Please try again.");
@@ -70,6 +83,7 @@ export default function NewOrder() {
   }, []);
   const service = services.find(s => s._id === serviceId);
   const express = service?.code === "IRONING" && speed === "EXPRESS";
+  const expressAvailable = service?.code === "IRONING" && config.EXPRESS_IRONING_ENABLED;
   function price(g) {
     if (service?.code === "IRONING") return Number(express ? g.ironingExpressPrice : g.ironingRegularPrice) || 0;
     if (service?.code === "WASHING") return Number(g.washingPrice) || 0;
@@ -82,13 +96,16 @@ export default function NewOrder() {
     unitPrice: price(g)
   }));
   const subtotal = items.reduce((s, g) => s + g.quantity * g.unitPrice, 0);
-  const tax = Math.round(subtotal * 18) / 100;
+  const taxPercent = config.TAX_ENABLED ? Number(config.TAX_PERCENT) : 0;
+  const tax = Math.round(subtotal * taxPercent) / 100;
   const total = Math.round((subtotal + tax) * 100) / 100;
+  const minimumOrder = express ? Number(config.EXPRESS_MIN_ORDER) : Number(config.REGULAR_MIN_ORDER);
+  const minimumMet = subtotal >= minimumOrder;
   const count = items.reduce((s, g) => s + g.quantity, 0);
   const visible = garments.filter(g => price(g) > 0 && (category === "ALL" || g.category === category) && g.name.toLowerCase().includes(query.toLowerCase()));
   const selected = slots.find(s => s._id === selectedSlot);
   const full = s => Number(s.bookedCount || 0) >= Number(s.maxOrders);
-  const canBook = items.length > 0 && address.line1.trim() && (express || !slotsLoading && !slotsError && selected && !full(selected));
+  const canBook = items.length > 0 && minimumMet && address.line1.trim() && (express || !slotsLoading && !slotsError && selected && !full(selected));
   function move(next) {
     setStep(next);
     setError("");
@@ -135,7 +152,7 @@ export default function NewOrder() {
       setSubmitting(false);
     }
   }
-  return <Layout title="Book a pickup" hideMobileNav><ol className="dg-stepper" aria-label="Booking progress">{["Service & garments", "Pickup & review"].map((label, i) => <li key={label} className={step >= i + 1 ? "active" : ""} aria-current={step === i + 1 ? "step" : undefined}><span>{i + 1}</span>{label}</li>)}</ol><div className="dg-booking-grid"><div><h2 ref={heading} tabIndex={-1} className="sr-only">{step === 1 ? "Choose your service and garments" : "Choose your pickup and review"}</h2>{loading ? <div role="status" className="dg-card dg-empty">Loading your laundry options…</div> : step === 1 ? <><section className="dg-card dg-booking-section"><h2>What needs a little care?</h2><p>Choose a service, then add your garments.</p><div className="dg-choice-grid">{services.map(s => <button key={s._id} className="dg-choice" aria-pressed={serviceId === s._id} onClick={() => chooseService(s._id)}><strong>{s.name}</strong><small>{s.description}</small></button>)}</div>{services.length === 0 && <p className="dg-empty">No services are available yet.</p>}</section><section className="dg-card dg-booking-section"><h2>Choose your service speed</h2><div className="dg-choice-grid"><button className="dg-choice" aria-pressed={speed === "REGULAR"} onClick={() => setSpeed("REGULAR")}><strong>Standard</strong><small>24–48 hour delivery</small></button>{service?.code === "IRONING" && <button className="dg-choice" aria-pressed={speed === "EXPRESS"} onClick={() => {
+  return <Layout title="Book a pickup" hideMobileNav><ol className="dg-stepper" aria-label="Booking progress">{["Service & garments", "Pickup & review"].map((label, i) => <li key={label} className={step >= i + 1 ? "active" : ""} aria-current={step === i + 1 ? "step" : undefined}><span>{i + 1}</span>{label}</li>)}</ol><div className="dg-booking-grid"><div><h2 ref={heading} tabIndex={-1} className="sr-only">{step === 1 ? "Choose your service and garments" : "Choose your pickup and review"}</h2>{loading ? <div role="status" className="dg-card dg-empty">Loading your laundry options…</div> : step === 1 ? <><section className="dg-card dg-booking-section"><h2>What needs a little care?</h2><p>Choose a service, then add your garments.</p><div className="dg-choice-grid">{services.map(s => <button key={s._id} className="dg-choice" aria-pressed={serviceId === s._id} onClick={() => chooseService(s._id)}><strong>{s.name}</strong><small>{s.description}</small></button>)}</div>{services.length === 0 && <p className="dg-empty">No services are available yet.</p>}</section><section className="dg-card dg-booking-section"><h2>Choose your service speed</h2><div className="dg-choice-grid"><button className="dg-choice" aria-pressed={speed === "REGULAR"} onClick={() => setSpeed("REGULAR")}><strong>Standard</strong><small>24–48 hour delivery</small></button>{expressAvailable && <button className="dg-choice" aria-pressed={speed === "EXPRESS"} onClick={() => {
                 setSpeed("EXPRESS");
                 setSelectedSlot("");
               }}><strong>Express</strong><small>Priority ironing service</small></button>}</div></section><section className="dg-card dg-booking-section"><h2>Add your garments</h2><div className="dg-toolbar"><input aria-label="Search garments" placeholder="Search shirts, trousers, sarees…" value={query} onChange={e => setQuery(e.target.value)} /></div><div className="dg-tabs" aria-label="Garment categories">{[["ALL", "All"], ...Object.entries(categories)].map(([key, label]) => <button key={key} aria-pressed={category === key} onClick={() => setCategory(key)}>{label}</button>)}</div>{visible.map(g => <div className="dg-garment-row" key={g._id}><div className="dg-garment-info"><div><strong>{g.name}</strong><p>{money(price(g))} / piece</p></div></div><div className="dg-quantity"><button aria-label={`Remove one ${g.name}`} disabled={!quantities[g._id]} onClick={() => setQuantities(q => ({
@@ -154,5 +171,5 @@ export default function NewOrder() {
                       weekday: "short",
                       day: "numeric",
                       month: "short"
-                    })}</strong><span>{s.timeRange}</span><small>{full(s) ? "Fully booked" : `${Math.max(0, s.maxOrders - (s.bookedCount || 0))} places available`}</small></button>)}</div>}<button className="dg-back underline mt-2" disabled={slotsLoading} onClick={loadSlots}>Refresh pickup times</button></>}</section></>}</div><aside className="dg-card dg-summary" aria-label="Order summary"><p className="dg-eyebrow">YOUR LAUNDRY BAG</p><h2>Looking fresh.</h2><p className="dg-muted text-sm mb-4">{service?.name || "Choose your service"} · {express ? "Express" : "Standard"}</p>{items.length === 0 ? <p className="dg-empty">Your bag is waiting.<br />Add garments to get started.</p> : items.map(g => <div className="dg-summary-line" key={g._id}><span>{g.name} × {g.quantity}</span><strong>{money(g.quantity * g.unitPrice)}</strong></div>)}<div className="dg-summary-line"><span>Subtotal · {count} pieces</span><span>{money(subtotal)}</span></div><div className="dg-summary-line"><span>GST (18%)</span><span>{money(tax)}</span></div><div className="dg-summary-line total"><span>Total</span><span>{money(total)}</span></div>{error && <p className="dg-error" role="alert">{error}</p>}{loading ? null : step === 1 ? <button className="dg-button" disabled={!items.length} onClick={() => move(2)}>Choose pickup →</button> : <button className="dg-button" disabled={!canBook || submitting} onClick={placeOrder}>{submitting ? "Placing your order…" : "Confirm & place order"}</button>}<p className="dg-summary-note">{step === 1 ? "Review your address and pickup time next." : !address.line1.trim() ? "Enter your pickup address to continue." : !express && !selected ? "Choose an available pickup time to continue." : "Please review your details before confirming."}</p>{!loading && services.length === 0 && <button className="dg-button dg-secondary" onClick={load}>Try loading again</button>}</aside></div></Layout>;
+                    })}</strong><span>{s.timeRange}</span><small>{full(s) ? "Fully booked" : `${Math.max(0, s.maxOrders - (s.bookedCount || 0))} places available`}</small></button>)}</div>}<button className="dg-back underline mt-2" disabled={slotsLoading} onClick={loadSlots}>Refresh pickup times</button></>}</section></>}</div><aside className="dg-card dg-summary" aria-label="Order summary"><p className="dg-eyebrow">YOUR LAUNDRY BAG</p><h2>Looking fresh.</h2><p className="dg-muted text-sm mb-4">{service?.name || "Choose your service"} · {express ? "Express" : "Standard"}</p>{items.length === 0 ? <p className="dg-empty">Your bag is waiting.<br />Add garments to get started.</p> : items.map(g => <div className="dg-summary-line" key={g._id}><span>{g.name} × {g.quantity}</span><strong>{money(g.quantity * g.unitPrice)}</strong></div>)}<div className="dg-summary-line"><span>Subtotal · {count} pieces</span><span>{money(subtotal)}</span></div>{config.TAX_ENABLED && <div className="dg-summary-line"><span>{config.TAX_LABEL} ({taxPercent}%)</span><span>{money(tax)}</span></div>}<div className="dg-summary-line total"><span>Total</span><span>{money(total)}</span></div>{error && <p className="dg-error" role="alert">{error}</p>}{loading ? null : step === 1 ? <button className="dg-button" disabled={!items.length} onClick={() => move(2)}>Choose pickup →</button> : <button className="dg-button" disabled={!canBook || submitting} onClick={placeOrder}>{submitting ? "Placing your order…" : "Confirm & place order"}</button>}<p className="dg-summary-note">{items.length > 0 && !minimumMet ? `Add ${money(minimumOrder - subtotal)} more to meet the ${money(minimumOrder)} minimum.` : step === 1 ? "Review your address and pickup time next." : !address.line1.trim() ? "Enter your pickup address to continue." : !express && !selected ? "Choose an available pickup time to continue." : "Please review your details before confirming."}</p>{!loading && services.length === 0 && <button className="dg-button dg-secondary" onClick={load}>Try loading again</button>}</aside></div></Layout>;
 }

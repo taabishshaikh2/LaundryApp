@@ -15,10 +15,12 @@ export default function AdminSlots() {
   async function load() {
     setLoading(true);
     try {
-      const {
-        data
-      } = await api.get("/admin/slots");
-      setSlots(data.slots || []);
+      const [slotsResponse, settingsResponse] = await Promise.all([
+        api.get("/admin/slots"),
+        api.get("/admin/settings")
+      ]);
+      setSlots(slotsResponse.data.slots || []);
+      setCapacity(current => current === 5 ? settingsResponse.data.settings.DEFAULT_MAX_ORDERS : current);
     } catch {
       setError("Couldn't load pickup slots. Please try again.");
     } finally {

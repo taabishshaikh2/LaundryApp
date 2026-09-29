@@ -67,7 +67,11 @@ const orderSchema = new mongoose.Schema(
     serviceCode: String, // WASHING, IRONING, DRY_CLEANING
     items: [orderItemSchema],
     subtotal: Number,
+    taxEnabled: { type: Boolean, default: true },
+    taxLabel: { type: String, default: "GST" },
+    taxPercent: { type: Number, default: 18 },
     gstAmount: Number,
+    minimumOrder: { type: Number, default: 0 },
     total: Number,
     status: { type: String, enum: ORDER_STATUSES, default: "ORDER_PLACED" },
     statusHistory: [statusHistorySchema],

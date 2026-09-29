@@ -13,6 +13,7 @@ import partnerRoutes from "./routes/partner.js";
 import adminSettingsRouter from "./routes/adminSettings.js";
 import slotsRouter from "./routes/slots.js";
 import slotsPublicRouter from "./routes/slotsPublic.js";
+import publicSettingsRouter from "./routes/publicSettings.js";
 
 
 const app = express();
@@ -33,9 +34,10 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/rider", riderRoutes);
 app.use("/api/partner", partnerRoutes);
-app.use("/admin/settings", adminSettingsRouter);
+app.use(["/api/admin/settings", "/admin/settings"], adminSettingsRouter);
 app.use(["/api/admin/slots", "/admin/slots"], slotsRouter);
 app.use("/api/slots", slotsPublicRouter);
+app.use("/api/config", publicSettingsRouter);
 // basic error handler
 app.use((err, req, res, next) => {
   console.error(err);

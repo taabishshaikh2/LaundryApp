@@ -22,6 +22,7 @@ import AdminPricing from "./pages/AdminPricing";
 import AdminServices from "./pages/AdminServices";
 import AdminLaundryPartners from "./pages/AdminLaundryPartners";
 import AdminNotifications from "./pages/AdminNotifications";
+import AdminSettings from "./pages/AdminSettings";
 import AdminComingSoon from "./pages/AdminComingSoon";
 export default function App() {
   return <AuthProvider>
@@ -61,7 +62,7 @@ export default function App() {
               <AdminComingSoon title="Issues / Notes" description="Track complaints, damages, and internal notes per order." />
             </ProtectedRoute>} />
         <Route path="/admin/settings" element={<ProtectedRoute adminOnly>
-              <AdminComingSoon title="Settings" description="Business settings, GST rate, priority multiplier, and more." />
+              <AdminSettings />
             </ProtectedRoute>} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
