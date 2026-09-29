@@ -5,12 +5,12 @@ import { useToast } from "../context/ToastContext";
 import AdminLayout from "../components/AdminLayout";
 import Card from "../components/ui/Card";
 import Skeleton from "../components/ui/Skeleton";
-
 export default function AdminDashboard() {
-  const { showError } = useToast();
+  const {
+    showError
+  } = useToast();
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
-
   useEffect(() => {
     async function load() {
       try {
@@ -24,91 +24,38 @@ export default function AdminDashboard() {
     }
     load();
   }, [showError]);
-
   if (loading) {
-    return (
-      <AdminLayout title="Dashboard">
+    return <AdminLayout title="Dashboard">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <Skeleton variant="card" count={4} />
         </div>
-      </AdminLayout>
-    );
+      </AdminLayout>;
   }
-
-  return (
-    <AdminLayout title="Dashboard">
+  return <AdminLayout title="Dashboard">
       <div className="animate-fade-in">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <StatCard
-            label="Total Orders"
-            value={summary?.orderCount ?? "—"}
-            icon="📦"
-            color="blue"
-          />
-          <StatCard
-            label="Active Orders"
-            value={summary?.activeOrders ?? "—"}
-            icon="🔄"
-            color="orange"
-          />
-          <StatCard
-            label="Customers"
-            value={summary?.customerCount ?? "—"}
-            icon="👥"
-            color="green"
-          />
-          <StatCard
-            label="Riders"
-            value={summary?.riderCount ?? "—"}
-            icon="🚴"
-            color="purple"
-          />
+          <StatCard label="Total Orders" value={summary?.orderCount ?? "—"} icon="📦" color="blue" />
+          <StatCard label="Active Orders" value={summary?.activeOrders ?? "—"} icon="🔄" color="orange" />
+          <StatCard label="Customers" value={summary?.customerCount ?? "—"} icon="👥" color="green" />
+          <StatCard label="Riders" value={summary?.riderCount ?? "—"} icon="🚴" color="purple" />
         </div>
 
+        <div className="dg-card mb-6"><div className="dg-section-heading" style={{
+          marginTop: 0
+        }}><div><p className="dg-eyebrow">PLAN YOUR DAY</p><h2>Keep every pickup on track.</h2></div><Link className="dg-button" to="/admin/slots">Manage pickup slots →</Link></div><p className="dg-muted">Set available windows before taking orders, then assign your team from the orders workspace.</p></div>
         <div className="mb-6">
           <h2 className="text-heading-3 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <QuickLink
-              to="/admin/orders"
-              title="Manage Orders"
-              desc="View all orders, change status, see history"
-              icon="📋"
-            />
-            <QuickLink
-              to="/admin/pricing"
-              title="Garments & Pricing"
-              desc="Add/remove garments, update prices"
-              icon="💰"
-            />
-            <QuickLink
-              to="/admin/services"
-              title="Laundry Services"
-              desc="Manage Washing, Ironing, Dry Cleaning"
-              icon="🧺"
-            />
-            <QuickLink
-              to="/admin/laundry-partners"
-              title="Laundry Partners"
-              desc="Add/remove partner locations"
-              icon="🏪"
-            />
-            <QuickLink
-              to="/admin/customers"
-              title="Customers"
-              desc="View registered customers"
-              icon="👤"
-            />
-            <QuickLink
-              to="/admin/riders"
-              title="Riders"
-              desc="Manage rider accounts"
-              icon="🛵"
-            />
+            <QuickLink to="/admin/orders" title="Manage Orders" desc="View all orders, change status, see history" icon="📋" />
+            <QuickLink to="/admin/pricing" title="Garments & Pricing" desc="Add/remove garments, update prices" icon="💰" />
+            <QuickLink to="/admin/services" title="Laundry Services" desc="Manage Washing, Ironing, Dry Cleaning" icon="🧺" />
+            <QuickLink to="/admin/laundry-partners" title="Laundry Partners" desc="Add/remove partner locations" icon="🏪" />
+            <QuickLink to="/admin/customers" title="Customers" desc="View registered customers" icon="👤" />
+            <QuickLink to="/admin/riders" title="Riders" desc="Manage rider accounts" icon="🛵" />
           </div>
         </div>
 
-        {summary?.revenue && (
-          <Card variant="elevated" className="gradient-subtle">
+        {summary?.revenue && <Card variant="elevated" className="gradient-subtle">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 mb-1">Total Revenue</p>
@@ -116,23 +63,23 @@ export default function AdminDashboard() {
               </div>
               <div className="text-5xl">💸</div>
             </div>
-          </Card>
-        )}
+          </Card>}
       </div>
-    </AdminLayout>
-  );
+    </AdminLayout>;
 }
-
-function StatCard({ label, value, icon, color = "blue" }) {
+function StatCard({
+  label,
+  value,
+  icon,
+  color = "blue"
+}) {
   const colorStyles = {
     blue: "from-blue-50 to-blue-100 border-blue-200",
     orange: "from-orange-50 to-orange-100 border-orange-200",
     green: "from-green-50 to-green-100 border-green-200",
-    purple: "from-purple-50 to-purple-100 border-purple-200",
+    purple: "from-purple-50 to-purple-100 border-purple-200"
   };
-
-  return (
-    <Card className={`bg-gradient-to-br ${colorStyles[color]}`}>
+  return <Card className={`bg-gradient-to-br ${colorStyles[color]}`}>
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs text-gray-600 mb-1">{label}</p>
@@ -140,13 +87,15 @@ function StatCard({ label, value, icon, color = "blue" }) {
         </div>
         <span className="text-2xl">{icon}</span>
       </div>
-    </Card>
-  );
+    </Card>;
 }
-
-function QuickLink({ to, title, desc, icon }) {
-  return (
-    <Link to={to}>
+function QuickLink({
+  to,
+  title,
+  desc,
+  icon
+}) {
+  return <Link to={to}>
       <Card variant="interactive" className="h-full">
         <div className="flex items-start gap-3">
           <span className="text-3xl">{icon}</span>
@@ -156,6 +105,5 @@ function QuickLink({ to, title, desc, icon }) {
           </div>
         </div>
       </Card>
-    </Link>
-  );
+    </Link>;
 }

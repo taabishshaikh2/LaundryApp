@@ -5,9 +5,7 @@ import App from "./App";
 import "./index.css";
 import ErrorBoundary from "./components/ui/ErrorBoundary";
 import { ToastProvider } from "./context/ToastContext";
-
-ReactDOM.createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
+ReactDOM.createRoot(document.getElementById("root")).render(<React.StrictMode>
     <ErrorBoundary>
       <BrowserRouter>
         <ToastProvider>
@@ -15,5 +13,5 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         </ToastProvider>
       </BrowserRouter>
     </ErrorBoundary>
-  </React.StrictMode>
-);
+  </React.StrictMode>);
+import "./styles/redesign.css";

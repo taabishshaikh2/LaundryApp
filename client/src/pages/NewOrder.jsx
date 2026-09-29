@@ -1,365 +1,158 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api";
 import Layout from "../components/Layout";
-
-const CATEGORY_LABELS = {
-  MEN: "Men's Wear",
-  WOMEN: "Women's Wear",
-  KIDS: "Kids' Wear",
-  HOUSEHOLD: "Household Items",
+import Input from "../components/ui/Input";
+const categories = {
+  MEN: "Men",
+  WOMEN: "Women",
+  KIDS: "Kids",
+  HOUSEHOLD: "Household"
 };
-
-const GST_PERCENT = 18;
-
+const money = n => `₹${Number(n).toFixed(2)}`;
 export default function NewOrder() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const preselectedServiceId = searchParams.get("service");
-
-  /* ------------------------------------------------------------------ */
-  /*                        State declarations                        */
-  /* ------------------------------------------------------------------ */
+  const [params] = useSearchParams();
   const [garments, setGarments] = useState([]);
   const [services, setServices] = useState([]);
-  const [serviceId, setServiceId] = useState(preselectedServiceId || "");
+  const [serviceId, setServiceId] = useState(params.get("service") || "");
+  const [speed, setSpeed] = useState("REGULAR");
   const [quantities, setQuantities] = useState({});
-  const [priority, setPriority] = useState("REGULAR"); // REGULAR | EXPRESS
   const [step, setStep] = useState(1);
-  const [address, setAddress] = useState({ label: "Home", line1: "", landmark: "" });
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-
-  /* ------------------------------------------------------------------ */
-  /*                        Slots – public API                        */
-  /* ------------------------------------------------------------------ */
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("ALL");
+  const [address, setAddress] = useState({
+    label: "Home",
+    line1: "",
+    landmark: ""
+  });
   const [slots, setSlots] = useState([]);
   const [selectedSlot, setSelectedSlot] = useState("");
+  const [loading, setLoading] = useState(true);
   const [slotsLoading, setSlotsLoading] = useState(true);
   const [slotsError, setSlotsError] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    api
-      .get("/slots")
-      .then((r) => {
-        if (!Array.isArray(r.data.slots)) throw new Error("Invalid slots response");
-        if (active) setSlots(r.data.slots);
-      })
-      .catch(() => {
-        if (active) {
-          setSlots([]);
-          setSlotsError("Could not load pickup slots. Please refresh the page to try again.");
-        }
-      })
-      .finally(() => { if (active) setSlotsLoading(false); });
-    return () => { active = false; };
-  }, []);
-
-  /* ------------------------------------------------------------------ */
-  /*                        Load data – garments / services             */
-  /* ------------------------------------------------------------------ */
-  useEffect(() => {
-    api.get("/garments").then((res) => setGarments(res.data.garments));
-    api
-      .get("/services")
-      .then((res) => {
-        setServices(res.data.services);
-        if (!preselectedServiceId && res.data.services.length > 0) {
-          setServiceId(res.data.services[0]._id);
-        }
-      })
-      .catch(console.error);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const selectedService = services.find((s) => s._id === serviceId);
-
-  /* ------------------------------------------------------------------ */
-  /*                        Helpers – price / items                       */
-  /* ------------------------------------------------------------------ */
-  const grouped = useMemo(() => {
-    const map = {};
-    garments.forEach((g) => {
-      map[g.category] = map[g.category] || [];
-      map[g.category].push(g);
-    });
-    return map;
-  }, [garments]);
-
-  const getBasePrice = (garment) => {
-    if (!selectedService) return 0;
-    switch (selectedService.code) {
-      case "WASHING":
-        return garment.washingPrice || 0;
-      case "DRY_CLEANING":
-        return garment.dryCleaningPrice || 0;
-      case "IRONING":
-        return priority === "EXPRESS"
-          ? garment.ironingExpressPrice || 0
-          : garment.ironingRegularPrice || 0;
-      default:
-        return 0;
-    }
-  };
-
-  const selectedItems = garments
-    .filter((g) => quantities[g._id] > 0)
-    .map((g) => ({
-      garmentId: g._id,
-      name: g.name,
-      quantity: quantities[g._id],
-      unitPrice: getBasePrice(g),
-    }));
-
-  const subtotal = selectedItems.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
-  const gstAmount = Math.round(subtotal * GST_PERCENT) / 100;
-  const total = Math.round((subtotal + gstAmount) * 100) / 100;
-
-  /* ------------------------------------------------------------------ */
-  /*                        UI helpers                                    */
-  /* ------------------------------------------------------------------ */
-  function updateQty(id, delta) {
-    setQuantities((q) => ({ ...q, [id]: Math.max(0, (q[id] || 0) + delta) }));
-  }
-
-  async function placeOrder() {
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const heading = useRef(null);
+  async function load() {
+    setLoading(true);
     setError("");
-    setSubmitting(true);
     try {
-      const res = await api.post("/orders", {
-        address,
-        speed: priority,
+      const [g, s] = await Promise.all([api.get("/garments"), api.get("/services")]);
+      const available = s.data.services.filter(x => x.active !== false);
+      setGarments(g.data.garments);
+      setServices(available);
+      setServiceId(current => available.some(x => x._id === current) ? current : available[0]?._id || "");
+    } catch {
+      setError("Could not load services and garments. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+  async function loadSlots() {
+    setSlotsLoading(true);
+    setSlotsError("");
+    try {
+      const {
+        data
+      } = await api.get("/slots");
+      if (!Array.isArray(data.slots)) throw Error();
+      setSlots(data.slots);
+    } catch {
+      setSlotsError("Could not load pickup times. Please try again.");
+    } finally {
+      setSlotsLoading(false);
+    }
+  }
+  useEffect(() => {
+    load();
+    loadSlots();
+  }, []);
+  const service = services.find(s => s._id === serviceId);
+  const express = service?.code === "IRONING" && speed === "EXPRESS";
+  function price(g) {
+    if (service?.code === "IRONING") return Number(express ? g.ironingExpressPrice : g.ironingRegularPrice) || 0;
+    if (service?.code === "WASHING") return Number(g.washingPrice) || 0;
+    if (service?.code === "DRY_CLEANING") return Number(g.dryCleaningPrice) || 0;
+    return 0;
+  }
+  const items = garments.filter(g => quantities[g._id] > 0 && price(g) > 0).map(g => ({
+    ...g,
+    quantity: quantities[g._id],
+    unitPrice: price(g)
+  }));
+  const subtotal = items.reduce((s, g) => s + g.quantity * g.unitPrice, 0);
+  const tax = Math.round(subtotal * 18) / 100;
+  const total = Math.round((subtotal + tax) * 100) / 100;
+  const count = items.reduce((s, g) => s + g.quantity, 0);
+  const visible = garments.filter(g => price(g) > 0 && (category === "ALL" || g.category === category) && g.name.toLowerCase().includes(query.toLowerCase()));
+  const selected = slots.find(s => s._id === selectedSlot);
+  const full = s => Number(s.bookedCount || 0) >= Number(s.maxOrders);
+  const canBook = items.length > 0 && address.line1.trim() && (express || !slotsLoading && !slotsError && selected && !full(selected));
+  function move(next) {
+    setStep(next);
+    setError("");
+    window.scrollTo({
+      top: 0,
+      behavior: "auto"
+    });
+    setTimeout(() => heading.current?.focus(), 0);
+  }
+  function chooseService(id) {
+    setServiceId(id);
+    setSpeed("REGULAR");
+    setQuantities({});
+    setQuery("");
+    setCategory("ALL");
+    setSelectedSlot("");
+  }
+  async function placeOrder() {
+    if (!canBook || submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const {
+        data
+      } = await api.post("/orders", {
+        address: {
+          ...address,
+          line1: address.line1.trim()
+        },
+        speed,
         serviceId,
-        pickupSlot: selectedSlot || undefined,
-        items: selectedItems.map((i) => ({
-          garmentId: i.garmentId,
-          quantity: i.quantity,
-          treatment: "WASH_IRON",
-        })),
+        pickupSlot: express ? undefined : selectedSlot,
+        items: items.map(g => ({
+          garmentId: g._id,
+          quantity: g.quantity,
+          treatment: "WASH_IRON"
+        }))
       });
-      navigate(`/orders/${res.data.order._id}`);
-    } catch (err) {
-      setError(err?.response?.data?.error || "Could not place order");
+      navigate(`/orders/${data.order._id}`);
+    } catch (e) {
+      setError(e?.response?.data?.error || "We couldn't place your order. Please try again.");
+      loadSlots();
     } finally {
       setSubmitting(false);
     }
   }
-
-  /* ------------------------------------------------------------------ */
-  /*                        Render                                          */
-  /* ------------------------------------------------------------------ */
-  return (
-    <Layout title="New order" hideMobileNav>
-      <div className="flex items-center gap-3 mb-4">
-        <button
-          onClick={() => (step === 2 ? setStep(1) : navigate("/"))}
-          className="text-lg leading-none"
-          aria-label="Go back"
-        >
-          ←
-        </button>
-        <p className="text-sm text-gray-500 flex-1">
-          Step {step} of 2 · {step === 1 ? "Select service & items" : "Cart"}
-        </p>
-        {total > 0 && (
-          <span className="text-sm font-semibold bg-gray-100 rounded-full px-3 py-1">
-            ₹{total.toFixed(2)}
-          </span>
-        )}
-      </div>
-
-      {/* ------------------------------------------------------------------
-           STEP 1 – Service & Items
-      ------------------------------------------------------------------- */}
-      {step === 1 && (
-        <>
-          <h3 className="text-xs uppercase text-gray-400 font-semibold mb-2">Laundry service</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-            {services.map((s) => (
-              <button
-                key={s._id}
-                onClick={() => setServiceId(s._id)}
-                className={`rounded-xl border p-4 text-left ${
-                  serviceId === s._id ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
-                }`}
-              >
-                <div className="text-2xl mb-1">{s.icon}</div>
-                <div className="font-semibold">{s.name}</div>
-                <div className="text-xs text-gray-500">{s.description}</div>
-              </button>
-            ))}
-          </div>
-
-          <h3 className="text-xs uppercase text-gray-400 font-semibold mb-2">Speed</h3>
-          <div className="flex gap-3 mb-6">
-            {selectedService && (
-              <>
-                {/* Washing & Dry Cleaning – only Standard */}
-                {(selectedService.code === "WASHING" ||
-                  selectedService.code === "DRY_CLEANING") && (
-                  <button
-                    onClick={() => setPriority("REGULAR")}
-                    className={`flex-1 rounded-xl border p-3 text-left ${
-                      priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
-                    }`}
-                    disabled
-                  >
-                    <div className="font-semibold">Standard 24‑48hr delivery</div>
-                  </button>
-                )}
-
-                {/* Ironing – Standard or Express */}
-                {selectedService.code === "IRONING" && (
-                  <>
-                    <button
-                      onClick={() => setPriority("REGULAR")}
-                      className={`flex-1 rounded-xl border p-3 text-left ${
-                        priority === "REGULAR" ? "border-brand-600 bg-brand-50" : "border-gray-200 bg-white"
-                      }`}
-                    >
-                      <div className="font-semibold">Standard 24‑48hr delivery</div>
-                    </button>
-                    <button
-                      onClick={() => setPriority("EXPRESS")}
-                      className={`flex-1 rounded-xl border p-3 text-left ${
-                        priority === "EXPRESS" ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white"
-                      }`}
-                    >
-                      <div className="font-semibold">Express 1hr delivery</div>
-                    </button>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Item picker */}
-          {Object.entries(grouped).map(([category, items]) => (
-            <div key={category} className="mb-6">
-              <h3 className="text-xs uppercase text-gray-400 font-semibold mb-2">
-                {CATEGORY_LABELS[category]}
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-                {items.map((g) => (
-                  <div key={g._id} className="border rounded-xl p-3 bg-white">
-                    <div className="text-2xl mb-1">{g.icon}</div>
-                    <div className="font-medium text-sm">{g.name}</div>
-                    <div className="text-xs text-gray-400 mb-2">₹{getBasePrice(g)}</div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => updateQty(g._id, -1)}
-                        className="w-8 h-8 rounded-full bg-gray-100 font-bold"
-                      >
-                        −
-                      </button>
-                      <span className="w-4 text-center">{quantities[g._id] || 0}</span>
-                      <button
-                        onClick={() => updateQty(g._id, 1)}
-                        className="w-8 h-8 rounded-full bg-brand-600 text-white font-bold"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          <button
-            disabled={selectedItems.length === 0 || !serviceId}
-            onClick={() => setStep(2)}
-            className="fixed bottom-4 left-4 right-4 md:static md:w-auto md:px-8 bg-brand-600 disabled:opacity-40 text-white rounded-xl py-3 font-semibold"
-          >
-            Continue →
-          </button>
-        </>
-      )}
-
-      {/* ------------------------------------------------------------------
-           STEP 2 – Cart & pickup
-      ------------------------------------------------------------------- */}
-      {step === 2 && (
-        <div className="max-w-md">
-          {/* Order summary */}
-          <div className="border rounded-xl p-4 mb-4 bg-white">
-            <p className="font-semibold mb-1">
-              {selectedService?.icon} {selectedService?.name} ·{" "}
-              {priority === "EXPRESS" ? "Express 1hr delivery" : "Standard 24-48hr delivery"}
-            </p>
-            <div className="border-t my-2" />
-            <p className="font-semibold mb-3">Your items</p>
-            {selectedItems.map((i) => (
-              <div key={i.garmentId} className="flex justify-between text-sm py-1">
-                <span>{i.name} × {i.quantity}</span>
-                <span>₹{i.unitPrice * i.quantity}</span>
-              </div>
-            ))}
-            <div className="border-t mt-2 pt-2 text-sm flex justify-between">
-              <span>Subtotal</span> <span>₹{subtotal.toFixed(2)}</span>
-            </div>
-            <div className="text-sm flex justify-between">
-              <span>GST ({GST_PERCENT}%)</span> <span>₹{gstAmount.toFixed(2)}</span>
-            </div>
-            <div className="font-bold flex justify-between mt-1">
-              <span>Total</span> <span>₹{total.toFixed(2)}</span>
-            </div>
-          </div>
-
-          {/* Address */}
-          <div className="border rounded-xl p-4 mb-4 bg-white">
-            <p className="font-semibold mb-3">Pickup address</p>
-            <input
-              placeholder="Flat / street / area"
-              value={address.line1}
-              onChange={(e) => setAddress((a) => ({ ...a, line1: e.target.value }))}
-              className="w-full border rounded-lg px-3 py-2 mb-2"
-            />
-            <input
-              placeholder="Landmark (optional)"
-              value={address.landmark}
-              onChange={(e) => setAddress((a) => ({ ...a, landmark: e.target.value }))}
-              className="w-full border rounded-lg px-3 py-2"
-            />
-          </div>
-
-          {/* ----------------------------------------------
-               Slot selector – only show if not Express
-           ---------------------------------------------- */}
-          {!(selectedService?.code === "IRONING" && priority === "EXPRESS") && (
-            <div className="mt-4">
-              <label htmlFor="pickup-slot">Pick a pickup slot</label>
-              <select
-                id="pickup-slot"
-                disabled={slotsLoading || !!slotsError || slots.length === 0}
-                value={selectedSlot}
-                onChange={(e) => setSelectedSlot(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 mt-1"
-              >
-                <option value="">{slotsLoading ? "Loading pickup slots…" : slotsError ? "Slots unavailable" : slots.length === 0 ? "No pickup slots available" : "Select a pickup slot"}</option>
-                {slots.map((s) => (
-                  <option key={s._id} value={s._id}>
-                    {new Date(s.date).toLocaleDateString()} {s.timeRange} (max {s.maxOrders})
-                  </option>
-                ))}
-              </select>
-              {slotsError && <p role="alert" className="text-red-600 text-sm mt-2">{slotsError}</p>}
-              {!slotsLoading && !slotsError && slots.length === 0 && <p className="text-gray-500 text-sm mt-2">No pickup slots have been scheduled yet.</p>}
-            </div>
-          )}
-
-          {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
-
-          <button
-            disabled={!address.line1 || submitting}
-            onClick={placeOrder}
-            className="w-full bg-brand-600 disabled:opacity-50 text-white rounded-xl py-3 font-semibold"
-          >
-            {submitting ? "Placing order…" : "Confirm & Place order"}
-          </button>
-        </div>
-      )}
-    </Layout>
-  );
+  return <Layout title="Book a pickup" hideMobileNav><ol className="dg-stepper" aria-label="Booking progress">{["Service & garments", "Pickup & review"].map((label, i) => <li key={label} className={step >= i + 1 ? "active" : ""} aria-current={step === i + 1 ? "step" : undefined}><span>{i + 1}</span>{label}</li>)}</ol><div className="dg-booking-grid"><div><h2 ref={heading} tabIndex={-1} className="sr-only">{step === 1 ? "Choose your service and garments" : "Choose your pickup and review"}</h2>{loading ? <div role="status" className="dg-card dg-empty">Loading your laundry options…</div> : step === 1 ? <><section className="dg-card dg-booking-section"><h2>What needs a little care?</h2><p>Choose a service, then add your garments.</p><div className="dg-choice-grid">{services.map(s => <button key={s._id} className="dg-choice" aria-pressed={serviceId === s._id} onClick={() => chooseService(s._id)}><strong>{s.name}</strong><small>{s.description}</small></button>)}</div>{services.length === 0 && <p className="dg-empty">No services are available yet.</p>}</section><section className="dg-card dg-booking-section"><h2>Choose your service speed</h2><div className="dg-choice-grid"><button className="dg-choice" aria-pressed={speed === "REGULAR"} onClick={() => setSpeed("REGULAR")}><strong>Standard</strong><small>24–48 hour delivery</small></button>{service?.code === "IRONING" && <button className="dg-choice" aria-pressed={speed === "EXPRESS"} onClick={() => {
+                setSpeed("EXPRESS");
+                setSelectedSlot("");
+              }}><strong>Express</strong><small>Priority ironing service</small></button>}</div></section><section className="dg-card dg-booking-section"><h2>Add your garments</h2><div className="dg-toolbar"><input aria-label="Search garments" placeholder="Search shirts, trousers, sarees…" value={query} onChange={e => setQuery(e.target.value)} /></div><div className="dg-tabs" aria-label="Garment categories">{[["ALL", "All"], ...Object.entries(categories)].map(([key, label]) => <button key={key} aria-pressed={category === key} onClick={() => setCategory(key)}>{label}</button>)}</div>{visible.map(g => <div className="dg-garment-row" key={g._id}><div className="dg-garment-info"><div><strong>{g.name}</strong><p>{money(price(g))} / piece</p></div></div><div className="dg-quantity"><button aria-label={`Remove one ${g.name}`} disabled={!quantities[g._id]} onClick={() => setQuantities(q => ({
+                  ...q,
+                  [g._id]: Math.max(0, (q[g._id] || 0) - 1)
+                }))}>−</button><span aria-live="polite">{quantities[g._id] || 0}</span><button aria-label={`Add one ${g.name}`} onClick={() => setQuantities(q => ({
+                  ...q,
+                  [g._id]: (q[g._id] || 0) + 1
+                }))}>+</button></div></div>)}{visible.length === 0 && <p className="dg-empty">No matching garments for this service.</p>}</section></> : <><button className="dg-back mb-4" onClick={() => move(1)}>← Edit service and garments</button><section className="dg-card dg-booking-section"><h2>Where should we pick up?</h2><p>Add the address where your garments will be ready.</p><div className="space-y-4"><Input label="Pickup address" required autoComplete="street-address" placeholder="Flat, building, street and area" value={address.line1} onChange={e => setAddress(a => ({
+                ...a,
+                line1: e.target.value
+              }))} /><Input label="Landmark (optional)" placeholder="Help your rider find you" value={address.landmark} onChange={e => setAddress(a => ({
+                ...a,
+                landmark: e.target.value
+              }))} /></div></section><section className="dg-card dg-booking-section"><h2>{express ? "Express pickup" : "Choose your pickup time"}</h2>{express ? <p>Express ironing uses the priority pickup flow. A scheduled slot isn't required.</p> : <>{slotsLoading ? <p role="status">Loading available times…</p> : slotsError ? <div role="alert" className="dg-error">{slotsError}</div> : slots.length === 0 ? <p className="dg-empty">No pickup times have been scheduled yet. Please check again before placing your order.</p> : <div className="dg-slot-grid">{slots.map(s => <button className="dg-choice" key={s._id} disabled={full(s)} aria-pressed={selectedSlot === s._id} onClick={() => setSelectedSlot(s._id)}><strong>{new Date(s.date).toLocaleDateString("en-IN", {
+                      weekday: "short",
+                      day: "numeric",
+                      month: "short"
+                    })}</strong><span>{s.timeRange}</span><small>{full(s) ? "Fully booked" : `${Math.max(0, s.maxOrders - (s.bookedCount || 0))} places available`}</small></button>)}</div>}<button className="dg-back underline mt-2" disabled={slotsLoading} onClick={loadSlots}>Refresh pickup times</button></>}</section></>}</div><aside className="dg-card dg-summary" aria-label="Order summary"><p className="dg-eyebrow">YOUR LAUNDRY BAG</p><h2>Looking fresh.</h2><p className="dg-muted text-sm mb-4">{service?.name || "Choose your service"} · {express ? "Express" : "Standard"}</p>{items.length === 0 ? <p className="dg-empty">Your bag is waiting.<br />Add garments to get started.</p> : items.map(g => <div className="dg-summary-line" key={g._id}><span>{g.name} × {g.quantity}</span><strong>{money(g.quantity * g.unitPrice)}</strong></div>)}<div className="dg-summary-line"><span>Subtotal · {count} pieces</span><span>{money(subtotal)}</span></div><div className="dg-summary-line"><span>GST (18%)</span><span>{money(tax)}</span></div><div className="dg-summary-line total"><span>Total</span><span>{money(total)}</span></div>{error && <p className="dg-error" role="alert">{error}</p>}{loading ? null : step === 1 ? <button className="dg-button" disabled={!items.length} onClick={() => move(2)}>Choose pickup →</button> : <button className="dg-button" disabled={!canBook || submitting} onClick={placeOrder}>{submitting ? "Placing your order…" : "Confirm & place order"}</button>}<p className="dg-summary-note">{step === 1 ? "Review your address and pickup time next." : !address.line1.trim() ? "Enter your pickup address to continue." : !express && !selected ? "Choose an available pickup time to continue." : "Please review your details before confirming."}</p>{!loading && services.length === 0 && <button className="dg-button dg-secondary" onClick={load}>Try loading again</button>}</aside></div></Layout>;
 }
