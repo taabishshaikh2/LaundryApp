@@ -8,6 +8,10 @@ function cleanText(value, limit) {
   return String(value || "").trim().slice(0, limit);
 }
 
+function isGenericUnexpectedName(name) {
+  return !name || name.toLowerCase().startsWith("unexpected garment");
+}
+
 function validatePhoto(photo) {
   const dataUrl = String(photo?.dataUrl || "");
   if (!DATA_URL_PATTERN.test(dataUrl)) throw new Error("Photos must be JPEG, PNG, or WebP images");
@@ -30,9 +34,13 @@ export function normalizeHandoverItems(items, orderedItems) {
     }
     const photos = Array.isArray(item.photos) ? item.photos : [];
     if (photos.length > MAX_PHOTOS_PER_ITEM) throw new Error("Add no more than 3 photos per garment");
+    const name = cleanText(ordered?.name || item.name, 100);
+    if (!ordered && isGenericUnexpectedName(name)) {
+      throw new Error("Enter the actual name of every unexpected garment (for example: Shirt, bedsheet, or scarf)");
+    }
     return {
       garmentId: ordered?.garmentId || item.garmentId || null,
-      name: cleanText(ordered?.name || item.name, 100),
+      name,
       orderedQuantity: Number(ordered?.quantity || item.orderedQuantity || 0),
       receivedQuantity,
       stainNotes: cleanText(item.stainNotes, 500),
