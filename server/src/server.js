@@ -23,7 +23,8 @@ app.use(
     origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
   })
 );
-app.use(express.json());
+// Handover photos are compressed by the client and kept deliberately small.
+app.use(express.json({ limit: "3mb" }));
 
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 

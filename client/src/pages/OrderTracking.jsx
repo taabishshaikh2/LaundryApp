@@ -6,6 +6,8 @@ import Layout from "../components/Layout";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
 import Skeleton from "../components/ui/Skeleton";
+import { HandoverDetails } from "../components/HandoverRecord";
+import { CancellationDetails, CustomerCancellation } from "../components/CancellationRecord";
 const STATUS_FLOW = ["ORDER_PLACED", "PICKUP_ASSIGNED", "RIDER_ON_THE_WAY", "PICKED_UP", "PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"];
 export default function OrderTracking() {
   const {
@@ -73,9 +75,12 @@ export default function OrderTracking() {
 
         <div className="grid gap-5 md:grid-cols-2 md:gap-8">
           <Card variant="elevated">
-            {order.status === "CANCELLED" ? <div className="text-center py-8">
+            {order.status === "CANCELLED" ? <div className="py-4">
+                <div className="text-center mb-5">
                 <div className="text-4xl mb-3">❌</div>
                 <p className="font-semibold text-red-600">This order was cancelled</p>
+                </div>
+                <CancellationDetails cancellation={order.cancellation} />
               </div> : <div className="space-y-6 py-2">
                 {STATUS_FLOW.map((s, i) => {
               const done = i <= currentIndex;
@@ -123,6 +128,11 @@ export default function OrderTracking() {
             </div>
           </Card>
         </div>
+        <Card variant="elevated" className="mt-5">
+          <h3 className="font-semibold text-gray-900 mb-4">Pickup handover</h3>
+          <HandoverDetails handover={order.handover} />
+        </Card>
+        <CustomerCancellation order={order} onSaved={setOrder} />
       </div>
     </Layout>;
 }

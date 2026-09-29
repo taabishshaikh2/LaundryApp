@@ -10,7 +10,9 @@ import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { advanceOrderStatus } from "../utils/orderStatus.js";
 import { sendWhatsAppNotification } from "../services/whatsapp.js";
 import { getBusinessSettings } from "../config/businessSettings.js";
-import { releaseSlotReservation, reserveSlot, SlotBookingError } from "../utils/slotBooking.js";
+import { reserveSlot, SlotBookingError } from "../utils/slotBooking.js";
+import { actorDetails, handoverSummary, normalizeHandoverItems } from "../utils/handover.js";
+import { cancelOrder, REFUND_STATUSES } from "../utils/orderCancellation.js";
 
 const router = express.Router();
 
@@ -194,6 +196,29 @@ router.get("/", requireAuth, async (req, res) => {
   res.json({ orders });
 });
 
+// Customer cancellation is allowed until the rider confirms physical pickup.
+router.post("/:id/cancel", requireAuth, async (req, res) => {
+  const orderId = req.params.id.replace(/["'\s]/g, "");
+  if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ error: "Invalid order ID format" });
+  const session = await mongoose.startSession();
+  try {
+    let order;
+    let cancelledNow = false;
+    await session.withTransaction(async () => {
+      order = await Order.findOne({ _id: orderId, userId: req.user.id }).session(session);
+      if (!order) return;
+      cancelledNow = await cancelOrder(order, { userId: req.user.id, role: "CUSTOMER", reason: req.body.reason, session });
+    });
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (cancelledNow) sendWhatsAppNotification(order, "CANCELLED").catch(() => {});
+    res.json({ order });
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Could not cancel order" });
+  } finally {
+    await session.endSession();
+  }
+});
+
 // Single order (owner or admin) - FIXED
 router.get("/:id", requireAuth, async (req, res) => {
   try {
@@ -255,27 +280,12 @@ router.put("/admin/:id/status", requireAuth, requireAdmin, async (req, res) => {
           cancelledNow = false;
           order = await Order.findById(orderId).session(session);
           if (!order) return;
-          if (order.status === "CANCELLED") return;
-          if (order.status === "DELIVERED") throw new Error("Delivered orders cannot be cancelled");
-          const previousStatus = order.status;
-          order.status = "CANCELLED";
-          order.statusHistory.push({
-            previousStatus,
-            newStatus: "CANCELLED",
-            changedBy: req.user.id,
-            changedByRole: "ADMIN",
-            note,
-            timestamp: new Date(),
+          cancelledNow = await cancelOrder(order, {
+            userId: req.user.id,
+            role: "ADMIN",
+            reason: note || "Cancelled by administrator",
+            session,
           });
-          if (!order.slotReservationReleasedAt) {
-            await releaseSlotReservation(order.pickupSlot, session);
-            if (order.deliverySlot && String(order.deliverySlot) !== String(order.pickupSlot)) {
-              await releaseSlotReservation(order.deliverySlot, session);
-            }
-            order.slotReservationReleasedAt = new Date();
-          }
-          await order.save({ session });
-          cancelledNow = true;
         });
       } finally {
         await session.endSession();
@@ -285,12 +295,72 @@ router.put("/admin/:id/status", requireAuth, requireAdmin, async (req, res) => {
     } else {
       order = await Order.findById(orderId);
       if (!order) return res.status(404).json({ error: "Order not found" });
+      if (["PICKED_UP", "PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"].includes(status) && !order.handover?.confirmedAt) {
+        return res.status(409).json({ error: "Record and confirm the garment handover before moving this order beyond pickup" });
+      }
       await advanceOrderStatus(order, status, { userId: req.user.id, role: "ADMIN", note });
     }
 
     res.json({ order });
   } catch (err) {
-    res.status(400).json({ error: "Could not update order", detail: err.message });
+    res.status(400).json({ error: err.message || "Could not update order" });
+  }
+});
+
+router.put("/admin/:id/handover", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const orderId = req.params.id.replace(/["'\s]/g, "");
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ error: "Invalid order ID format" });
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (["CANCELLED", "DELIVERED"].includes(order.status)) return res.status(409).json({ error: "This order can no longer be changed" });
+    const items = normalizeHandoverItems(req.body.items, order.items);
+    const actor = await actorDetails(req.user.id, "ADMIN");
+    const firstConfirmation = !order.handover?.confirmedAt;
+    const now = new Date();
+    order.handover.items = items;
+    order.handover.generalNotes = String(req.body.generalNotes || "").trim().slice(0, 1000);
+    order.handover.confirmedAt ||= now;
+    order.handover.confirmedBy ||= req.user.id;
+    order.handover.confirmedByName ||= actor.changedByName;
+    order.handover.confirmedByRole ||= "ADMIN";
+    order.handover.lastUpdatedAt = now;
+    order.handover.auditTrail.push({ ...actor, action: firstConfirmation ? "CONFIRMED" : "UPDATED", summary: handoverSummary(items), timestamp: now });
+    await order.save();
+    if (firstConfirmation && ["PICKUP_ASSIGNED", "RIDER_ON_THE_WAY"].includes(order.status)) {
+      await advanceOrderStatus(order, "PICKED_UP", { userId: req.user.id, role: "ADMIN", note: handoverSummary(items) });
+    }
+    res.json({ order });
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Could not save handover" });
+  }
+});
+
+router.put("/admin/:id/refund", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const orderId = req.params.id.replace(/["'\s]/g, "");
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ error: "Invalid order ID format" });
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (order.status !== "CANCELLED") return res.status(409).json({ error: "Refund details can only be updated for cancelled orders" });
+    const status = String(req.body.refundStatus || "");
+    const amount = Number(req.body.refundAmount || 0);
+    if (!REFUND_STATUSES.includes(status)) return res.status(400).json({ error: "Invalid refund status" });
+    if (!Number.isFinite(amount) || amount < 0 || amount > order.total) return res.status(400).json({ error: "Refund amount must be between ₹0 and the order total" });
+    if (status === "PROCESSED" && !String(req.body.refundReference || "").trim()) {
+      return res.status(400).json({ error: "Add a transaction or refund reference before marking processed" });
+    }
+    const actor = await actorDetails(req.user.id, "ADMIN");
+    order.cancellation.refundStatus = status;
+    order.cancellation.refundAmount = amount;
+    order.cancellation.refundMethod = String(req.body.refundMethod || "").trim().slice(0, 60);
+    order.cancellation.refundReference = String(req.body.refundReference || "").trim().slice(0, 120);
+    order.cancellation.auditTrail.push({ ...actor, action: "REFUND_UPDATED", note: `${status}: ₹${amount}`, timestamp: new Date() });
+    if (status === "PROCESSED") order.paymentStatus = amount >= order.total ? "REFUNDED" : "PARTIALLY_REFUNDED";
+    await order.save();
+    res.json({ order });
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Could not update refund" });
   }
 });
 
