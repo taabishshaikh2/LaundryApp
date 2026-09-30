@@ -144,6 +144,35 @@ const pricingRevisionSchema = new mongoose.Schema(
   { _id: true }
 );
 
+const processingStageSchema = new mongoose.Schema(
+  {
+    stage: { type: String, required: true },
+    status: { type: String, enum: ["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "FAILED"], default: "NOT_STARTED" },
+    startedAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    updatedByName: { type: String, default: "" },
+    note: { type: String, trim: true, maxlength: 500, default: "" },
+    issueType: { type: String, enum: ["", "STAIN_REMAINS", "DAMAGE_FOUND", "CARE_CONCERN", "EQUIPMENT_DELAY", "OTHER"], default: "" },
+    issueNote: { type: String, trim: true, maxlength: 500, default: "" },
+    photos: { type: [garmentPhotoSchema], default: [] },
+  },
+  { _id: false }
+);
+
+const processingAuditSchema = new mongoose.Schema(
+  {
+    action: { type: String, required: true },
+    stage: { type: String, default: "" },
+    changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    changedByName: { type: String, required: true },
+    changedByRole: { type: String, required: true },
+    note: { type: String, default: "" },
+    timestamp: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -201,6 +230,30 @@ const orderSchema = new mongoose.Schema(
     paymentStatus: { type: String, enum: ["UNPAID", "PAID", "REFUNDED", "PARTIALLY_REFUNDED"], default: "UNPAID" },
     paymentMethod: { type: String, default: "CASH_ON_DELIVERY" },
     pricingRevisions: { type: [pricingRevisionSchema], default: [] },
+    processing: {
+      requiredStages: { type: [String], default: [] },
+      dueAt: { type: Date, default: null },
+      intake: {
+        status: { type: String, enum: ["PENDING", "MATCHED", "DISCREPANCY"], default: "PENDING" },
+        bagCount: { type: Number, min: 1, default: 1 },
+        expectedQuantity: { type: Number, min: 0, default: 0 },
+        verifiedQuantity: { type: Number, min: 0, default: 0 },
+        discrepancyNote: { type: String, trim: true, maxlength: 500, default: "" },
+        confirmedAt: { type: Date, default: null },
+        confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        confirmedByName: { type: String, default: "" },
+      },
+      stages: { type: [processingStageSchema], default: [] },
+      qualityCheck: {
+        status: { type: String, enum: ["PENDING", "PASSED", "FAILED"], default: "PENDING" },
+        notes: { type: String, trim: true, maxlength: 1000, default: "" },
+        photos: { type: [garmentPhotoSchema], default: [] },
+        checkedAt: { type: Date, default: null },
+        checkedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+        checkedByName: { type: String, default: "" },
+      },
+      auditTrail: { type: [processingAuditSchema], default: [] },
+    },
     // Set by admin when assigning a rider: STANDARD or EXPRESS delivery
     deliveryMethod: { type: String, enum: ["STANDARD", "EXPRESS"], default: null },
   },

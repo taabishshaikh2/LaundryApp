@@ -14,6 +14,7 @@ import { reserveSlot, SlotBookingError } from "../utils/slotBooking.js";
 import { actorDetails, handoverSummary, normalizeHandoverItems } from "../utils/handover.js";
 import { cancelOrder, REFUND_STATUSES } from "../utils/orderCancellation.js";
 import { buildPricingRevision, handoverHasDifferences, latestPricingRevision, pricingIsResolved } from "../utils/pricingRevision.js";
+import { initializeProcessing, processingIsReady } from "../utils/processingWorkflow.js";
 
 const router = express.Router();
 
@@ -337,6 +338,10 @@ router.put("/admin/:id/status", requireAuth, requireAdmin, async (req, res) => {
       if (["PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"].includes(status) && !pricingIsResolved(order)) {
         return res.status(409).json({ error: "The received garment count changed. Customer approval of the latest revised bill is required before processing" });
       }
+      if (["READY", "OUT_FOR_DELIVERY", "DELIVERED"].includes(status) && !processingIsReady(order)) {
+        return res.status(409).json({ error: "Complete laundry intake, processing stages, quality check, and packing before marking this order ready" });
+      }
+      if (status === "PROCESSING") initializeProcessing(order);
       await advanceOrderStatus(order, status, { userId: req.user.id, role: "ADMIN", note });
     }
 
@@ -496,6 +501,7 @@ router.put("/admin/:id/assign-partner", requireAuth, requireAdmin, async (req, r
 
     if (order.status === "PICKED_UP") {
       if (pricingIsResolved(order)) {
+        initializeProcessing(order);
         await advanceOrderStatus(order, "PROCESSING", {
           userId: req.user.id,
           role: "ADMIN",

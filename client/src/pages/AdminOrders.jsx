@@ -8,6 +8,7 @@ import EmptyState from "../components/ui/EmptyState";
 import { HandoverDetails, HandoverEditor } from "../components/HandoverRecord";
 import { AdminCancellation, AdminRefundEditor, CancellationDetails } from "../components/CancellationRecord";
 import { AdminPricingRevision } from "../components/PricingRevision";
+import { ProcessingTimeline } from "../components/ProcessingWorkflow";
 
 const STATUS_LIST = ["ORDER_PLACED", "PICKUP_ASSIGNED", "RIDER_ON_THE_WAY", "PICKED_UP", "PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
 
@@ -41,8 +42,9 @@ export default function AdminOrders() {
       const open = expandedId === order._id;
       const orderedCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
       const receivedCount = order.handover?.items?.reduce((sum, item) => sum + item.receivedQuantity, 0);
+      const processingOverdue = order.processing?.dueAt && new Date(order.processing.dueAt) < new Date() && !["READY", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"].includes(order.status);
       return <Card key={order._id} padding="lg" className="dg-admin-order-card">
-        <div className="dg-order-head"><div><p className="dg-eyebrow">ORDER #{order._id.slice(-6).toUpperCase()}</p><h2>{order.userId?.name || "Customer"}</h2><p className="dg-muted">{order.userId?.phone} · {order.serviceName} · ₹{order.total}</p></div><span className="dg-status">{order.status.replaceAll("_", " ")}</span></div>
+        <div className="dg-order-head"><div><p className="dg-eyebrow">ORDER #{order._id.slice(-6).toUpperCase()}</p><h2>{order.userId?.name || "Customer"}</h2><p className="dg-muted">{order.userId?.phone} · {order.serviceName} · ₹{order.total}</p></div><div className="flex gap-2"><span className="dg-status">{order.status.replaceAll("_", " ")}</span>{processingOverdue && <span className="dg-status is-overdue">DELAYED</span>}</div></div>
         <div className="dg-admin-order-metrics"><div><span>Ordered</span><strong>{orderedCount}</strong></div><div><span>Received</span><strong>{order.handover?.confirmedAt ? receivedCount : "Pending"}</strong></div><div><span>Pickup</span><strong>{order.pickupSlot ? `${new Date(order.pickupSlot.date).toLocaleDateString("en-IN")} · ${order.pickupSlot.timeRange}` : order.speed === "EXPRESS" ? "Express" : "—"}</strong></div><div><span>{order.status === "CANCELLED" ? "Refund" : "Revised bill"}</span><strong>{order.status === "CANCELLED" ? order.cancellation?.refundStatus?.replaceAll("_", " ") : order.pricingRevisions?.at(-1)?.status?.replaceAll("_", " ") || "Not needed"}</strong></div></div>
         <div className="dg-admin-actions"><label>Status<select value={order.status} disabled={updatingId === order._id} onChange={(event) => updateStatus(order, event.target.value)}>{STATUS_LIST.map((status) => <option key={status}>{status}</option>)}</select></label><label>Rider<select value={order.riderId?._id || ""} disabled={updatingId === order._id || order.status === "CANCELLED"} onChange={(event) => event.target.value && assign(order._id, { riderId: event.target.value, deliveryMethod: order.deliveryMethod || "STANDARD" })}><option value="">Unassigned</option>{riders.map((rider) => <option key={rider._id} value={rider._id}>{rider.name}</option>)}</select></label><label>Partner<select value={order.partnerId?._id || ""} disabled={updatingId === order._id || order.status === "CANCELLED"} onChange={(event) => event.target.value && assign(order._id, { partnerId: event.target.value }, "assign-partner")}><option value="">Unassigned</option>{partners.map((partner) => <option key={partner._id} value={partner._id}>{partner.businessName}</option>)}</select></label><button className="dg-button dg-secondary" onClick={() => setExpandedId(open ? null : order._id)}>{open ? "Close record" : "Open full record"}</button></div>
         {open && <div className="dg-order-record">
@@ -50,6 +52,7 @@ export default function AdminOrders() {
           <section><h3>Ordered garments</h3>{order.items.map((item, index) => <p key={index}>{item.name} × {item.quantity}</p>)}</section>
           {order.status === "CANCELLED" ? <><CancellationDetails cancellation={order.cancellation} /><AdminRefundEditor order={order} onSaved={load} /></> : order.handover?.confirmedAt ? <><HandoverDetails handover={order.handover} />{order.status !== "DELIVERED" && <details className="mt-4"><summary>Edit handover record</summary><HandoverEditor order={order} endpoint={`/orders/admin/${order._id}/handover`} onSaved={load} title="Correct handover record" /></details>}</> : <HandoverEditor order={order} endpoint={`/orders/admin/${order._id}/handover`} onSaved={load} title="Record handover for rider" />}
           {order.status !== "CANCELLED" && order.handover?.confirmedAt && <AdminPricingRevision order={order} onSaved={load} />}
+          {order.processing?.requiredStages?.length > 0 && <section><h3>Laundry processing & quality</h3><ProcessingTimeline order={order} /></section>}
           <section><h3>Status history</h3><ul className="dg-audit-list">{order.statusHistory.map((entry, index) => <li key={index}>{entry.previousStatus || "Created"} → {entry.newStatus} · {entry.changedByRole} · {new Date(entry.timestamp).toLocaleString("en-IN")}{entry.note && <><br />{entry.note}</>}</li>)}</ul></section>
         </div>}
       </Card>;

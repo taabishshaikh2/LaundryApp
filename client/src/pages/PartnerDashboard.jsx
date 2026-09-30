@@ -1,98 +1,32 @@
 import React, { useEffect, useState } from "react";
 import api from "../api";
 import RoleLayout from "../components/RoleLayout";
+import { PartnerProcessingControls, ProcessingTimeline } from "../components/ProcessingWorkflow";
+
 export default function PartnerDashboard() {
   const [orders, setOrders] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [updatingId, setUpdatingId] = useState(null);
-  const [noteDrafts, setNoteDrafts] = useState({});
-  async function load() {
-    try {
-      const res = await api.get("/partner/orders");
-      setOrders(res.data.orders);
-      setError("");
-    } catch {
-      setError("Could not load assigned orders. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-  useEffect(() => {
-    load();
-  }, []);
-  async function markReady(orderId) {
-    setUpdatingId(orderId);
-    try {
-      await api.put(`/partner/orders/${orderId}/status`, {
-        status: "READY"
-      });
-      await load();
-    } catch {
-      setError("Could not update this order. Please try again.");
-    } finally {
-      setUpdatingId(null);
-    }
-  }
-  async function submitNote(orderId) {
-    try {
-      const text = (noteDrafts[orderId] || "").trim();
-      if (!text) return;
-      await api.post(`/partner/orders/${orderId}/notes`, {
-        text
-      });
-      setNoteDrafts(d => ({
-        ...d,
-        [orderId]: ""
-      }));
-      await load();
-    } catch {
-      setError("Could not save your note. Please try again.");
-    }
-  }
-  const toProcess = orders.filter(o => o.status === "PROCESSING");
-  const others = orders.filter(o => o.status !== "PROCESSING");
-  return <RoleLayout title="Laundry Partner" subtitle="Orders routed to your facility">
-      {error && <div className="dg-error" role="alert">{error} <button onClick={load} className="underline">Retry</button></div>}
-      {loading && <p role="status" className="dg-empty">Loading your assignments…</p>}
-      <h2 className="font-semibold mb-3">To process ({toProcess.length})</h2>
-      <div className="space-y-4 mb-8">
-        {toProcess.map(o => <div key={o._id} className="border rounded-xl p-4 bg-white">
-            <p className="font-semibold mb-1">#{o._id.slice(-6).toUpperCase()} · {o.userId?.name}</p>
-            <p className="text-sm text-gray-500 mb-2">{o.serviceName} · {o.items.length} items</p>
-            <ul className="text-sm text-gray-600 mb-3">
-              {o.items.map((i, idx) => <li key={idx}>{i.name} × {i.quantity} ({i.treatment.replaceAll("_", " ")})</li>)}
-            </ul>
-            <button disabled={updatingId === o._id} onClick={() => markReady(o._id)} className="bg-brand-600 text-white rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-60">
-              {updatingId === o._id ? "Updating…" : "Mark Ready"}
-            </button>
-
-            <div className="mt-3 flex gap-2">
-              <input aria-label="Order note" placeholder="Add a note (e.g. stain couldn't be removed)…" value={noteDrafts[o._id] || ""} onChange={e => setNoteDrafts(d => ({
-            ...d,
-            [o._id]: e.target.value
-          }))} className="flex-1 border rounded-lg px-3 py-1.5 text-sm" />
-              <button onClick={() => submitNote(o._id)} className="text-sm border rounded-lg px-3 py-1.5">
-                Add
-              </button>
-            </div>
-            {o.notes?.length > 0 && <ul className="mt-2 text-xs text-gray-500 space-y-1">
-                {o.notes.map((n, idx) => <li key={idx}>📝 {n.text}</li>)}
-              </ul>}
-          </div>)}
-        {!loading && !error && toProcess.length === 0 && <p className="text-gray-400 text-sm">Nothing waiting to be processed right now.</p>}
-      </div>
-
-      {others.length > 0 && <>
-          {error && <div className="dg-error" role="alert">{error} <button onClick={load} className="underline">Retry</button></div>}
-      {loading && <p role="status" className="dg-empty">Loading your assignments…</p>}
-      <h2 className="font-semibold mb-3">Other assigned orders</h2>
-          <div className="space-y-2">
-            {others.map(o => <div key={o._id} className="border rounded-xl p-3 bg-white text-sm flex justify-between">
-                <span>#{o._id.slice(-6).toUpperCase()} · {o.userId?.name}</span>
-                <span className="text-gray-400">{o.status.replaceAll("_", " ")}</span>
-              </div>)}
-          </div>
-        </>}
-    </RoleLayout>;
+  const [expandedId, setExpandedId] = useState(null);
+  async function load() { try { const response = await api.get("/partner/orders"); setOrders(response.data.orders); setError(""); } catch { setError("Could not load assigned orders. Please try again."); } finally { setLoading(false); } }
+  useEffect(() => { load(); }, []);
+  const processing = orders.filter((order) => order.status === "PROCESSING");
+  const others = orders.filter((order) => order.status !== "PROCESSING");
+  return <RoleLayout title="Laundry Partner" subtitle="Intake, processing, quality, and packing">
+    {error && <div className="dg-error" role="alert">{error} <button onClick={load} className="underline">Retry</button></div>}
+    {loading && <p role="status" className="dg-empty">Loading assignments…</p>}
+    <div className="dg-section-heading"><h2>Processing ({processing.length})</h2></div>
+    <div className="space-y-4">{processing.map((order) => {
+      const open = expandedId === order._id;
+      const received = (order.handover?.items || []).reduce((sum, item) => sum + Number(item.receivedQuantity || 0), 0);
+      const overdue = order.processing?.dueAt && new Date(order.processing.dueAt) < new Date();
+      return <article key={order._id} className="dg-card dg-partner-order">
+        <div className="dg-order-head"><div><p className="dg-eyebrow">ORDER #{order._id.slice(-6).toUpperCase()}</p><h2>{order.userId?.name}</h2><p className="dg-muted">{order.serviceName} · {received} received garment(s)</p></div><div className="text-right"><span className={`dg-status ${overdue ? "is-overdue" : ""}`}>{overdue ? "DELAYED" : "PROCESSING"}</span>{order.userId?.phone && <a className="block text-sm mt-2" href={`tel:${order.userId.phone}`}>Call customer</a>}</div></div>
+        <div className="mt-4"><ProcessingTimeline order={order} showAudit={false} /></div>
+        <button className="dg-button mt-4" onClick={() => setExpandedId(open ? null : order._id)}>{open ? "Close work panel" : "Continue processing"}</button>
+        {open && <div className="dg-partner-work-panel"><PartnerProcessingControls order={order} onSaved={load} /></div>}
+      </article>;
+    })}{!loading && !processing.length && <p className="dg-empty">Nothing is waiting to be processed.</p>}</div>
+    {!!others.length && <><div className="dg-section-heading"><h2>Other assigned orders</h2></div><div className="space-y-2">{others.map((order) => <div key={order._id} className="dg-card flex justify-between gap-3"><span>#{order._id.slice(-6).toUpperCase()} · {order.userId?.name}</span><span className="dg-status">{order.status.replaceAll("_", " ")}</span></div>)}</div></>}
+  </RoleLayout>;
 }
