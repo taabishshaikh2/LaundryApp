@@ -7,7 +7,10 @@ import Garment from "../models/Garment.js";
 import Service from "../models/Service.js";
 import LaundryPartner from "../models/LaundryPartner.js";
 import Notification from "../models/Notification.js";
+import Issue from "../models/Issue.js";
+import Slot from "../models/Slot.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import { buildAnalytics } from "../utils/analytics.js";
 
 const router = express.Router();
 
@@ -25,6 +28,43 @@ router.get("/summary", async (req, res) => {
   const revenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
   const activeOrders = orders.filter((o) => !["DELIVERED", "CANCELLED"].includes(o.status)).length;
   res.json({ customerCount, riderCount, orderCount, revenue, activeOrders });
+});
+
+router.get("/report-options", async (req, res) => {
+  const [riders, partners, services] = await Promise.all([
+    User.find({ role: "RIDER" }).select("name").sort({ name: 1 }),
+    LaundryPartner.find().select("businessName active").sort({ businessName: 1 }),
+    Service.find().select("name code active").sort({ name: 1 }),
+  ]);
+  res.json({ riders, partners, services });
+});
+
+router.get("/reports", async (req, res) => {
+  try {
+    const today = new Date();
+    const defaultFrom = new Date(today); defaultFrom.setUTCDate(defaultFrom.getUTCDate() - 29); defaultFrom.setUTCHours(0, 0, 0, 0);
+    const from = req.query.from ? new Date(`${req.query.from}T00:00:00.000Z`) : defaultFrom;
+    const to = req.query.to ? new Date(`${req.query.to}T23:59:59.999Z`) : new Date(today.setUTCHours(23, 59, 59, 999));
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from > to) return res.status(400).json({ error: "Choose a valid date range" });
+    if (to - from > 366 * 86400000) return res.status(400).json({ error: "Reports are limited to a 12-month range" });
+    const query = { createdAt: { $gte: from, $lte: to } };
+    if (req.query.status) query.status = req.query.status;
+    if (req.query.service) query.serviceCode = req.query.service;
+    if (req.query.riderId && mongoose.Types.ObjectId.isValid(req.query.riderId)) query.riderId = req.query.riderId;
+    if (req.query.partnerId && mongoose.Types.ObjectId.isValid(req.query.partnerId)) query.partnerId = req.query.partnerId;
+    const orders = await Order.find(query).populate("userId", "name").populate("riderId", "name").populate("partnerId", "businessName").lean();
+    const orderIds = orders.map((order) => order._id);
+    const customerIds = [...new Set(orders.map((order) => String(order.userId?._id || order.userId || "")).filter(Boolean))];
+    const issueQuery = { createdAt: { $gte: from, $lte: to } };
+    if (req.query.status || req.query.service || req.query.riderId || req.query.partnerId) issueQuery.orderId = { $in: orderIds };
+    const [issues, slots, firstOrders] = await Promise.all([
+      Issue.find(issueQuery).select("orderId category status priority resolutionDeadline createdAt").lean(),
+      Slot.find({ date: { $gte: from, $lte: to } }).sort({ date: 1, timeRange: 1 }).lean(),
+      customerIds.length ? Order.aggregate([{ $match: { userId: { $in: customerIds.map((id) => new mongoose.Types.ObjectId(id)) } } }, { $group: { _id: "$userId", firstOrderAt: { $min: "$createdAt" } } }]) : [],
+    ]);
+    const firstOrderByUser = Object.fromEntries(firstOrders.map((row) => [String(row._id), row.firstOrderAt]));
+    res.json({ report: buildAnalytics({ orders, issues, slots, firstOrderByUser, from, to }) });
+  } catch (err) { res.status(400).json({ error: "Could not build report", detail: err.message }); }
 });
 
 // ---- Customers ----

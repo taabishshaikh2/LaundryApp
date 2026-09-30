@@ -47,6 +47,7 @@ export default function AdminDashboard() {
           <h2 className="text-heading-3 mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <QuickLink to="/admin/orders" title="Manage Orders" desc="View all orders, change status, see history" icon="📋" />
+            <QuickLink to="/admin/reports" title="Reports & Analytics" desc="Revenue, operations, quality and capacity" icon="📊" />
             <QuickLink to="/admin/pricing" title="Garments & Pricing" desc="Add/remove garments, update prices" icon="💰" />
             <QuickLink to="/admin/services" title="Laundry Services" desc="Manage Washing, Ironing, Dry Cleaning" icon="🧺" />
             <QuickLink to="/admin/laundry-partners" title="Laundry Partners" desc="Add/remove partner locations" icon="🏪" />

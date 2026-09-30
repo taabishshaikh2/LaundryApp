@@ -27,6 +27,7 @@ import AdminComingSoon from "./pages/AdminComingSoon";
 import ForgotPassword from "./pages/ForgotPassword";
 import Account from "./pages/Account";
 import AdminIssues from "./pages/AdminIssues";
+import AdminReports from "./pages/AdminReports";
 export default function App() {
   return <AuthProvider>
       <Routes>
@@ -51,6 +52,7 @@ export default function App() {
 
         <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
         <Route path="/admin/orders" element={<ProtectedRoute adminOnly><AdminOrders /></ProtectedRoute>} />
+        <Route path="/admin/reports" element={<ProtectedRoute adminOnly><AdminReports /></ProtectedRoute>} />
         <Route path="/admin/customers" element={<ProtectedRoute adminOnly><AdminCustomers /></ProtectedRoute>} />
         <Route path="/admin/riders" element={<ProtectedRoute adminOnly><AdminRiders /></ProtectedRoute>} />
         <Route path="/admin/pricing" element={<ProtectedRoute adminOnly><AdminPricing /></ProtectedRoute>} />
