@@ -58,7 +58,8 @@ export default function AdminLaundryPartners() {
     <AdminLayout title="Laundry Partners">
       <div className="grid md:grid-cols-3 gap-6">
         <div className="md:col-span-2">
-          <div className="border rounded-xl overflow-hidden bg-white">
+          <p className="dg-table-hint">Swipe sideways to view all partner details.</p>
+          <div className="border rounded-xl bg-white dg-table-scroll" role="region" aria-label="Laundry partners table" tabIndex="0">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-left">
                 <tr>

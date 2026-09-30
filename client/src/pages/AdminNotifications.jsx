@@ -14,9 +14,10 @@ export default function AdminNotifications() {
       <p className="text-sm text-gray-500 mb-4">
         Every WhatsApp-style message the system has sent, newest first. Real WhatsApp Business API
         credentials aren't configured yet — these are logged and simulated as "Sent" so the flow can be
-        tested end-to-end (see <code className="bg-gray-100 px-1 rounded">server/src/services/whatsapp.js</code>).
+        tested end-to-end (see <code className="bg-gray-100 px-1 rounded dg-break-text">server/src/services/whatsapp.js</code>).
       </p>
-      <div className="border rounded-xl overflow-hidden bg-white">
+      <p className="dg-table-hint">Swipe sideways to view complete notification details.</p>
+      <div className="border rounded-xl bg-white dg-table-scroll" role="region" aria-label="Notifications table" tabIndex="0">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left">
             <tr>
