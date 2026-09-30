@@ -9,6 +9,7 @@ import { HandoverDetails, HandoverEditor } from "../components/HandoverRecord";
 import { AdminCancellation, AdminRefundEditor, CancellationDetails } from "../components/CancellationRecord";
 import { AdminPricingRevision } from "../components/PricingRevision";
 import { ProcessingTimeline } from "../components/ProcessingWorkflow";
+import { DeliveryProofDetails } from "../components/DeliveryProof";
 
 const STATUS_LIST = ["ORDER_PLACED", "PICKUP_ASSIGNED", "RIDER_ON_THE_WAY", "PICKED_UP", "PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"];
 
@@ -53,6 +54,7 @@ export default function AdminOrders() {
           {order.status === "CANCELLED" ? <><CancellationDetails cancellation={order.cancellation} /><AdminRefundEditor order={order} onSaved={load} /></> : order.handover?.confirmedAt ? <><HandoverDetails handover={order.handover} />{order.status !== "DELIVERED" && <details className="mt-4"><summary>Edit handover record</summary><HandoverEditor order={order} endpoint={`/orders/admin/${order._id}/handover`} onSaved={load} title="Correct handover record" /></details>}</> : <HandoverEditor order={order} endpoint={`/orders/admin/${order._id}/handover`} onSaved={load} title="Record handover for rider" />}
           {order.status !== "CANCELLED" && order.handover?.confirmedAt && <AdminPricingRevision order={order} onSaved={load} />}
           {order.processing?.requiredStages?.length > 0 && <section><h3>Laundry processing & quality</h3><ProcessingTimeline order={order} /></section>}
+          <section><h3>Proof of delivery</h3><DeliveryProofDetails proof={order.deliveryProof} /></section>
           <section><h3>Status history</h3><ul className="dg-audit-list">{order.statusHistory.map((entry, index) => <li key={index}>{entry.previousStatus || "Created"} → {entry.newStatus} · {entry.changedByRole} · {new Date(entry.timestamp).toLocaleString("en-IN")}{entry.note && <><br />{entry.note}</>}</li>)}</ul></section>
         </div>}
       </Card>;

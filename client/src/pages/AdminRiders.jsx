@@ -16,6 +16,8 @@ export default function AdminRiders() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "" });
   const [submitting, setSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ name: "", email: "", phone: "", password: "" });
 
   async function load() {
     try {
@@ -45,6 +47,18 @@ export default function AdminRiders() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function startEdit(rider) {
+    setEditingId(rider._id);
+    setEditForm({ name: rider.name || "", email: rider.email || "", phone: rider.phone || "", password: "" });
+  }
+
+  async function saveEdit(e) {
+    e.preventDefault(); setSubmitting(true);
+    try { await api.put(`/admin/riders/${editingId}`, editForm); showSuccess(editForm.password ? "Rider information and password updated" : "Rider information updated"); setEditingId(null); await load(); }
+    catch (err) { showError(err.response?.data?.error || "Could not update rider"); }
+    finally { setSubmitting(false); }
   }
 
   const filteredRiders = riders.filter((r) => {
@@ -125,6 +139,8 @@ export default function AdminRiders() {
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
             </div>
 
+            {editingId && <Card variant="elevated" padding="lg"><form onSubmit={saveEdit} className="space-y-4"><div className="flex justify-between gap-3 items-center"><h2 className="text-heading-4">Edit rider</h2><button type="button" className="underline text-sm" onClick={() => setEditingId(null)}>Cancel</button></div><Input label="Full name" required value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} /><Input label="Login email" type="email" required value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /><Input label="Phone" required value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /><Input label="New password (optional)" type="password" minLength="8" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} placeholder="Leave blank to keep current password" /><Button className="w-full" loading={submitting}>Save rider</Button></form></Card>}
+
             {filteredRiders.length === 0 ? (
               <Card>
                 <EmptyState
@@ -144,6 +160,7 @@ export default function AdminRiders() {
                         <th className="p-3 font-semibold">Email</th>
                         <th className="p-3 font-semibold">Phone</th>
                         <th className="p-3 font-semibold">Joined</th>
+                        <th className="p-3 font-semibold">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -155,6 +172,7 @@ export default function AdminRiders() {
                           <td className="p-3 text-xs text-gray-500">
                             {new Date(r.createdAt).toLocaleDateString()}
                           </td>
+                          <td className="p-3"><button className="dg-button dg-secondary" onClick={() => startEdit(r)}>Edit</button></td>
                         </tr>
                       ))}
                     </tbody>
@@ -177,6 +195,7 @@ export default function AdminRiders() {
                         <p className="text-xs text-gray-500">
                           Joined {new Date(r.createdAt).toLocaleDateString()}
                         </p>
+                        <button className="dg-button dg-secondary w-full mt-2" onClick={() => startEdit(r)}>Edit information / password</button>
                       </div>
                     </Card>
                   ))}

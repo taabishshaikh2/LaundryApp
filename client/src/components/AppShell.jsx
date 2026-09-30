@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Icon from "./Icon";
 const customer = [["/", "Overview", "home"], ["/new-order", "Book a pickup", "plus"], ["/orders", "My orders", "bag"], ["/profile", "My account", "user"]];
-const administration = [["/admin", "Overview", "grid"], ["/admin/orders", "Orders", "bag"], ["/admin/slots", "Pickup slots", "clock"], ["/admin/customers", "Customers", "user"], ["/admin/riders", "Riders", "user"], ["/admin/laundry-partners", "Laundry partners", "home"], ["/admin/services", "Services", "shirt"], ["/admin/pricing", "Garments & pricing", "shirt"], ["/admin/notifications", "Notifications", "bag"], ["/admin/payments", "Payments", "grid"], ["/admin/issues", "Issues", "bag"], ["/admin/settings", "Settings", "settings"]];
+const administration = [["/admin", "Overview", "grid"], ["/admin/orders", "Orders", "bag"], ["/admin/slots", "Pickup slots", "clock"], ["/admin/customers", "Customers", "user"], ["/admin/riders", "Riders", "user"], ["/admin/laundry-partners", "Laundry partners", "home"], ["/admin/services", "Services", "shirt"], ["/admin/pricing", "Garments & pricing", "shirt"], ["/admin/notifications", "Notifications", "bag"], ["/admin/payments", "Payments", "grid"], ["/admin/issues", "Issues", "bag"], ["/admin/settings", "Settings", "settings"], ["/account", "My account", "user"]];
 export function Brand({
   to = "/"
 }) {

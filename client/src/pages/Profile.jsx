@@ -6,6 +6,7 @@ import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import api from "../api";
+import PasswordChange from "../components/PasswordChange";
 
 export default function Profile() {
   const { user, refreshUser } = useAuth();
@@ -131,6 +132,7 @@ export default function Profile() {
             </div>
           </div>
         </Card>
+        <Card variant="default" className="mt-4"><PasswordChange /></Card>
       </div>
     </Layout>
   );

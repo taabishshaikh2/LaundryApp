@@ -12,13 +12,15 @@ export default function OrderHistory() {
     showError
   } = useToast();
   const [orders, setOrders] = useState([]);
+  const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
   useEffect(() => {
     async function load() {
       try {
-        const res = await api.get("/orders");
-        setOrders(res.data.orders);
+        const [orderResponse, issueResponse] = await Promise.all([api.get("/orders"), api.get("/issues/mine")]);
+        setOrders(orderResponse.data.orders);
+        setIssues(issueResponse.data.issues);
       } catch (err) {
         showError("Failed to load orders");
       } finally {
@@ -58,7 +60,7 @@ export default function OrderHistory() {
         {filtered.length === 0 ? <Card>
             <EmptyState icon="📦" title="No orders found" description={filter === "all" ? "You haven't placed any orders yet" : `No ${filter} orders found`} action={filter === "all" ? "Place your first order" : undefined} onAction={filter === "all" ? () => window.location.href = "/new-order" : undefined} />
           </Card> : <div className="space-y-3">
-            {filtered.map(o => <Link key={o._id} to={`/orders/${o._id}`}>
+            {filtered.map(o => { const orderIssues = issues.filter((issue) => String(issue.orderId?._id || issue.orderId) === o._id); const activeIssue = orderIssues.find((issue) => !["RESOLVED", "CLOSED"].includes(issue.status)); return <Link key={o._id} to={`/orders/${o._id}`}>
                 <Card variant="interactive">
                   <div className="flex flex-wrap gap-3 justify-between items-start mb-2">
                     <div>
@@ -78,8 +80,9 @@ export default function OrderHistory() {
                     <span className="mx-2">•</span>
                     <span>{new Date(o.createdAt).toLocaleDateString()}</span>
                   </div>
+                  {!!orderIssues.length && <div className="mt-3"><Badge variant={activeIssue ? "warning" : "success"}>{orderIssues.length} issue{orderIssues.length > 1 ? "s" : ""} · {activeIssue ? activeIssue.status.replaceAll("_", " ") : "RESOLVED"}</Badge></div>}
                 </Card>
-              </Link>)}
+              </Link>;})}
           </div>}
       </div>
     </Layout>;

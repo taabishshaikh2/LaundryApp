@@ -78,14 +78,24 @@ router.put("/riders/:id", async (req, res) => {
       return res.status(400).json({ error: "Invalid rider ID format" });
     }
 
-    const { name, phone, active } = req.body;
-    const rider = await User.findOneAndUpdate(
-      { _id: riderId, role: "RIDER" },
-      { ...(name && { name }), ...(phone && { phone }) },
-      { new: true }
-    ).select("-passwordHash");
+    const { name, email, phone, password } = req.body;
+    const rider = await User.findOne({ _id: riderId, role: "RIDER" });
     if (!rider) return res.status(404).json({ error: "Rider not found" });
-    res.json({ rider });
+    if (email && email.toLowerCase() !== rider.email) {
+      const duplicate = await User.findOne({ email: email.toLowerCase(), _id: { $ne: rider._id } });
+      if (duplicate) return res.status(409).json({ error: "Email already registered" });
+      rider.email = email;
+    }
+    if (name !== undefined) rider.name = String(name).trim();
+    if (phone !== undefined) rider.phone = String(phone).trim();
+    if (password) {
+      if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters" });
+      rider.passwordHash = await bcrypt.hash(password, 10);
+    }
+    await rider.save();
+    const safeRider = rider.toObject();
+    delete safeRider.passwordHash;
+    res.json({ rider: safeRider });
   } catch (err) {
     res.status(400).json({ error: "Could not update rider", detail: err.message });
   }
@@ -279,20 +289,29 @@ router.put("/laundry-partners/:id", async (req, res) => {
       return res.status(400).json({ error: "Invalid partner ID format" });
     }
 
-    const { businessName, phone, address, servicesOffered, active } = req.body;
-    const partner = await LaundryPartner.findByIdAndUpdate(
-      partnerId,
-      {
-        ...(businessName !== undefined && { businessName }),
-        ...(phone !== undefined && { phone }),
-        ...(address !== undefined && { address }),
-        ...(servicesOffered !== undefined && { servicesOffered }),
-        ...(active !== undefined && { active }),
-      },
-      { new: true }
-    );
+    const { businessName, contactName, email, phone, password, address, servicesOffered, active } = req.body;
+    const partner = await LaundryPartner.findById(partnerId);
     if (!partner) return res.status(404).json({ error: "Laundry partner not found" });
-    res.json({ partner });
+    const user = partner.userId ? await User.findById(partner.userId) : null;
+    if (!user) return res.status(404).json({ error: "Partner login account not found" });
+    if (email && email.toLowerCase() !== user.email) {
+      const duplicate = await User.findOne({ email: email.toLowerCase(), _id: { $ne: user._id } });
+      if (duplicate) return res.status(409).json({ error: "Email already registered" });
+      user.email = email;
+    }
+    if (contactName !== undefined) user.name = String(contactName).trim();
+    if (phone !== undefined) user.phone = String(phone).trim();
+    if (password) {
+      if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters" });
+      user.passwordHash = await bcrypt.hash(password, 10);
+    }
+    if (businessName !== undefined) partner.businessName = String(businessName).trim();
+    if (phone !== undefined) partner.phone = String(phone).trim();
+    if (address !== undefined) partner.address = String(address).trim();
+    if (servicesOffered !== undefined) partner.servicesOffered = servicesOffered;
+    if (active !== undefined) partner.active = active;
+    await Promise.all([user.save(), partner.save()]);
+    res.json({ partner: { ...partner.toObject(), userId: { _id: user._id, name: user.name, email: user.email, phone: user.phone } } });
   } catch (err) {
     res.status(400).json({ error: "Could not update partner", detail: err.message });
   }

@@ -24,12 +24,16 @@ import AdminLaundryPartners from "./pages/AdminLaundryPartners";
 import AdminNotifications from "./pages/AdminNotifications";
 import AdminSettings from "./pages/AdminSettings";
 import AdminComingSoon from "./pages/AdminComingSoon";
+import ForgotPassword from "./pages/ForgotPassword";
+import Account from "./pages/Account";
+import AdminIssues from "./pages/AdminIssues";
 export default function App() {
   return <AuthProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
 
         <Route path="/onboarding" element={<RequireAuthOnly>
               <Onboarding />
@@ -43,6 +47,7 @@ export default function App() {
 
         <Route path="/rider" element={<ProtectedRoute roles={["RIDER"]}><RiderDashboard /></ProtectedRoute>} />
         <Route path="/partner" element={<ProtectedRoute roles={["LAUNDRY_PARTNER"]}><PartnerDashboard /></ProtectedRoute>} />
+        <Route path="/account" element={<ProtectedRoute roles={["RIDER", "LAUNDRY_PARTNER", "ADMIN"]}><Account /></ProtectedRoute>} />
 
         <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
         <Route path="/admin/orders" element={<ProtectedRoute adminOnly><AdminOrders /></ProtectedRoute>} />
@@ -58,9 +63,7 @@ export default function App() {
               <AdminComingSoon title="Payments" description="View Razorpay payment records once payments are wired in." />
             </ProtectedRoute>} />
         <Route path="/admin/notifications" element={<ProtectedRoute adminOnly><AdminNotifications /></ProtectedRoute>} />
-        <Route path="/admin/issues" element={<ProtectedRoute adminOnly>
-              <AdminComingSoon title="Issues / Notes" description="Track complaints, damages, and internal notes per order." />
-            </ProtectedRoute>} />
+        <Route path="/admin/issues" element={<ProtectedRoute adminOnly><AdminIssues /></ProtectedRoute>} />
         <Route path="/admin/settings" element={<ProtectedRoute adminOnly>
               <AdminSettings />
             </ProtectedRoute>} />

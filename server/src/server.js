@@ -14,6 +14,7 @@ import adminSettingsRouter from "./routes/adminSettings.js";
 import slotsRouter from "./routes/slots.js";
 import slotsPublicRouter from "./routes/slotsPublic.js";
 import publicSettingsRouter from "./routes/publicSettings.js";
+import issueRoutes from "./routes/issues.js";
 
 
 const app = express();
@@ -39,6 +40,7 @@ app.use(["/api/admin/settings", "/admin/settings"], adminSettingsRouter);
 app.use(["/api/admin/slots", "/admin/slots"], slotsRouter);
 app.use("/api/slots", slotsPublicRouter);
 app.use("/api/config", publicSettingsRouter);
+app.use("/api/issues", issueRoutes);
 // basic error handler
 app.use((err, req, res, next) => {
   console.error(err);

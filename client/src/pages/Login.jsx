@@ -1,6 +1,6 @@
 import AuthLayout from "../components/AuthLayout";
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import Input from "../components/ui/Input";
@@ -10,6 +10,7 @@ export default function Login() {
     login
   } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     showError
   } = useToast();
@@ -34,6 +35,9 @@ export default function Login() {
             <Input label="Email" type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
 
             <Input label="Password" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" />
+            <div className="text-right"><Link to="/forgot-password" className="text-sm text-brand-600 underline">Forgot password?</Link></div>
+
+            {location.state?.passwordReset && <div className="dg-success">Password reset successfully. Sign in with your new password.</div>}
 
             <Button type="submit" variant="primary" size="lg" loading={loading} className="w-full">
               {loading ? "Signing in..." : "Sign in →"}

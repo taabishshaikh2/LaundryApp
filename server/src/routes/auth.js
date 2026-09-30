@@ -2,6 +2,7 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import LaundryPartner from "../models/LaundryPartner.js";
 import { requireAuth } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -21,7 +22,12 @@ function publicUser(user) {
     role: user.role,
     onboarding: user.onboarding,
     addresses: user.addresses,
+    createdAt: user.createdAt,
   };
+}
+
+function validatePassword(password) {
+  return typeof password === "string" && password.length >= 8;
 }
 
 router.post("/register", async (req, res) => {
@@ -58,10 +64,82 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// Provider-free pilot recovery: verify both values already stored on the account,
+// then issue a short-lived token that can only be used to reset a password.
+router.post("/forgot-password/verify", async (req, res) => {
+  try {
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const phone = String(req.body.phone || "").replace(/\D/g, "");
+    const user = await User.findOne({ email });
+    const storedPhone = String(user?.phone || "").replace(/\D/g, "");
+    if (!user || !phone || phone !== storedPhone) {
+      return res.status(400).json({ error: "The email and registered phone number do not match" });
+    }
+    const resetToken = jwt.sign(
+      { id: user._id, purpose: "PASSWORD_RESET" },
+      process.env.JWT_SECRET,
+      { expiresIn: "10m" }
+    );
+    res.json({ resetToken, expiresInMinutes: 10 });
+  } catch (err) {
+    res.status(500).json({ error: "Could not verify this account", detail: err.message });
+  }
+});
+
+router.post("/forgot-password/reset", async (req, res) => {
+  try {
+    if (!validatePassword(req.body.password)) {
+      return res.status(400).json({ error: "Password must be at least 8 characters" });
+    }
+    const payload = jwt.verify(String(req.body.resetToken || ""), process.env.JWT_SECRET);
+    if (payload.purpose !== "PASSWORD_RESET") return res.status(400).json({ error: "Invalid reset session" });
+    const user = await User.findById(payload.id);
+    if (!user) return res.status(404).json({ error: "Account not found" });
+    user.passwordHash = await bcrypt.hash(req.body.password, 10);
+    await user.save();
+    res.json({ ok: true });
+  } catch {
+    res.status(400).json({ error: "This reset session is invalid or has expired" });
+  }
+});
+
 router.get("/me", requireAuth, async (req, res) => {
   const user = await User.findById(req.user.id);
   if (!user) return res.status(404).json({ error: "User not found" });
   res.json({ user: publicUser(user) });
+});
+
+router.put("/profile", requireAuth, async (req, res) => {
+  try {
+    const name = String(req.body.name || "").trim();
+    const phone = String(req.body.phone || "").trim();
+    if (!name || !phone) return res.status(400).json({ error: "Name and phone are required" });
+    const user = await User.findByIdAndUpdate(req.user.id, { name, phone }, { new: true });
+    if (!user) return res.status(404).json({ error: "Account not found" });
+    if (user.role === "LAUNDRY_PARTNER") await LaundryPartner.updateOne({ userId: user._id }, { phone });
+    res.json({ user: publicUser(user) });
+  } catch (err) {
+    res.status(400).json({ error: "Could not update profile", detail: err.message });
+  }
+});
+
+router.put("/change-password", requireAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!validatePassword(newPassword)) return res.status(400).json({ error: "New password must be at least 8 characters" });
+    const user = await User.findById(req.user.id);
+    if (!user || !(await bcrypt.compare(String(currentPassword || ""), user.passwordHash))) {
+      return res.status(400).json({ error: "Current password is incorrect" });
+    }
+    if (await bcrypt.compare(newPassword, user.passwordHash)) {
+      return res.status(400).json({ error: "Choose a different password" });
+    }
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    await user.save();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: "Could not change password", detail: err.message });
+  }
 });
 
 router.put("/onboarding", requireAuth, async (req, res) => {

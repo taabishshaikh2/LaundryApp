@@ -2,11 +2,11 @@ import React, { useEffect, useState } from "react";
 import api from "../api";
 import RoleLayout from "../components/RoleLayout";
 import { HandoverDetails, HandoverEditor } from "../components/HandoverRecord";
+import { DeliveryProofDetails, RiderDeliveryForm } from "../components/DeliveryProof";
 
 const NEXT_ACTION = {
   PICKUP_ASSIGNED: { status: "RIDER_ON_THE_WAY", label: "Start pickup journey" },
   READY: { status: "OUT_FOR_DELIVERY", label: "Start delivery" },
-  OUT_FOR_DELIVERY: { status: "DELIVERED", label: "Mark delivered" },
 };
 const WAITING_TEXT = { PICKED_UP: "Pickup recorded. Waiting for processing…", PROCESSING: "Being processed by the laundry partner…" };
 
@@ -32,8 +32,8 @@ export default function RiderDashboard() {
       <div className="flex flex-wrap gap-2 items-center my-3"><span className="dg-status">{order.status.replaceAll("_", " ")}</span><span className="text-xs dg-muted">{order.items.reduce((sum, item) => sum + item.quantity, 0)} garments ordered</span></div>
       {action && <button disabled={updatingId === order._id} onClick={() => advance(order._id, action.status)} className="dg-button">{updatingId === order._id ? "Updating…" : action.label}</button>}
       {WAITING_TEXT[order.status] && <p className="text-sm dg-muted">{WAITING_TEXT[order.status]}</p>}
-      <button className="dg-button dg-secondary ml-2" onClick={() => setExpandedId(isOpen ? null : order._id)}>{isOpen ? "Close details" : canRecordPickup ? "Count & confirm garments" : "View handover"}</button>
-      {isOpen && <div className="mt-5 border-t pt-4">{canRecordPickup ? <HandoverEditor order={order} endpoint={`/rider/orders/${order._id}/handover`} onSaved={load} /> : <HandoverDetails handover={order.handover} />}</div>}
+      <button className="dg-button dg-secondary ml-2" onClick={() => setExpandedId(isOpen ? null : order._id)}>{isOpen ? "Close details" : canRecordPickup ? "Count & confirm garments" : order.status === "OUT_FOR_DELIVERY" ? "Verify & complete delivery" : order.status === "DELIVERED" ? "View delivery proof" : "View handover"}</button>
+      {isOpen && <div className="mt-5 border-t pt-4">{canRecordPickup ? <HandoverEditor order={order} endpoint={`/rider/orders/${order._id}/handover`} onSaved={load} /> : order.status === "OUT_FOR_DELIVERY" ? <RiderDeliveryForm order={order} onSaved={load} /> : order.status === "DELIVERED" ? <DeliveryProofDetails proof={order.deliveryProof} /> : <HandoverDetails handover={order.handover} />}</div>}
       <div className="mt-4 flex gap-2"><input aria-label="Order note" placeholder="Gate code or pickup issue…" value={noteDrafts[order._id] || ""} onChange={(event) => setNoteDrafts((drafts) => ({ ...drafts, [order._id]: event.target.value }))} className="flex-1" /><button onClick={() => submitNote(order._id)} className="dg-button dg-secondary">Add note</button></div>
     </article>;
   }

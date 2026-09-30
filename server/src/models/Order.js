@@ -173,6 +173,18 @@ const processingAuditSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const deliveryAuditSchema = new mongoose.Schema(
+  {
+    action: { type: String, required: true },
+    changedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    changedByName: { type: String, required: true },
+    changedByRole: { type: String, required: true },
+    note: { type: String, default: "" },
+    timestamp: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -253,6 +265,30 @@ const orderSchema = new mongoose.Schema(
         checkedByName: { type: String, default: "" },
       },
       auditTrail: { type: [processingAuditSchema], default: [] },
+    },
+    deliveryProof: {
+      otpHash: { type: String, default: "", select: false },
+      otpGeneratedAt: { type: Date, default: null },
+      otpExpiresAt: { type: Date, default: null },
+      otpFailedAttempts: { type: Number, min: 0, default: 0 },
+      verifiedAt: { type: Date, default: null },
+      verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+      verifiedByName: { type: String, default: "" },
+      recipientName: { type: String, trim: true, maxlength: 100, default: "" },
+      expectedGarmentCount: { type: Number, min: 0, default: 0 },
+      deliveredGarmentCount: { type: Number, min: 0, default: 0 },
+      missingOrDamagedNotes: { type: String, trim: true, maxlength: 1000, default: "" },
+      photo: { type: garmentPhotoSchema, default: null },
+      cashCollected: { type: Boolean, default: false },
+      collectedAmount: { type: Number, min: 0, default: 0 },
+      collectionMethod: { type: String, trim: true, maxlength: 40, default: "" },
+      collectionReference: { type: String, trim: true, maxlength: 120, default: "" },
+      location: {
+        lat: { type: Number, default: null },
+        lng: { type: Number, default: null },
+        address: { type: String, trim: true, maxlength: 300, default: "" },
+      },
+      auditTrail: { type: [deliveryAuditSchema], default: [] },
     },
     // Set by admin when assigning a rider: STANDARD or EXPRESS delivery
     deliveryMethod: { type: String, enum: ["STANDARD", "EXPRESS"], default: null },

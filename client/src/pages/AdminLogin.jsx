@@ -36,6 +36,7 @@ export default function AdminLogin() {
           <label htmlFor="admin-email" className="text-sm font-medium">Admin email</label>
           <input id="admin-email" type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full mt-1 border rounded-lg px-3 py-2" placeholder="admin@dhobighat.com" />
         </div>
+        <div className="text-right"><Link to="/forgot-password" className="text-sm text-brand-600 underline">Forgot password?</Link></div>
         <div>
           <label htmlFor="admin-password" className="text-sm font-medium">Password</label>
           <input id="admin-password" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full mt-1 border rounded-lg px-3 py-2" />

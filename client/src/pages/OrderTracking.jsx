@@ -10,6 +10,8 @@ import { HandoverDetails } from "../components/HandoverRecord";
 import { CancellationDetails, CustomerCancellation } from "../components/CancellationRecord";
 import { CustomerPricingApproval } from "../components/PricingRevision";
 import { ProcessingTimeline } from "../components/ProcessingWorkflow";
+import { CustomerDeliveryCode, DeliveryProofDetails } from "../components/DeliveryProof";
+import IssueCenter from "../components/IssueCenter";
 const STATUS_FLOW = ["ORDER_PLACED", "PICKUP_ASSIGNED", "RIDER_ON_THE_WAY", "PICKED_UP", "PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"];
 export default function OrderTracking() {
   const {
@@ -136,7 +138,10 @@ export default function OrderTracking() {
         </Card>
         <CustomerPricingApproval order={order} onSaved={setOrder} />
         {order.processing?.requiredStages?.length > 0 && <Card variant="elevated" className="mt-5"><h3 className="font-semibold text-gray-900 mb-4">Laundry progress</h3><ProcessingTimeline order={order} /></Card>}
+        <div className="mt-5"><CustomerDeliveryCode order={order} /></div>
+        {order.deliveryProof?.verifiedAt && <Card variant="elevated" className="mt-5"><h3 className="font-semibold text-gray-900 mb-4">Proof of delivery</h3><DeliveryProofDetails proof={order.deliveryProof} /></Card>}
         <CustomerCancellation order={order} onSaved={setOrder} />
+        <div className="mt-5"><IssueCenter order={order} /></div>
       </div>
     </Layout>;
 }

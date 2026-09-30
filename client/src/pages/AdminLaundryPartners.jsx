@@ -14,6 +14,8 @@ export default function AdminLaundryPartners() {
   });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ businessName: "", contactName: "", email: "", phone: "", address: "", password: "" });
 
   async function load() {
     const res = await api.get("/admin/laundry-partners");
@@ -54,6 +56,18 @@ export default function AdminLaundryPartners() {
     }
   }
 
+  function startEdit(partner) {
+    setEditingId(partner._id);
+    setEditForm({ businessName: partner.businessName || "", contactName: partner.userId?.name || "", email: partner.userId?.email || "", phone: partner.phone || partner.userId?.phone || "", address: partner.address || "", password: "" });
+  }
+
+  async function saveEdit(e) {
+    e.preventDefault(); setSubmitting(true); setError("");
+    try { await api.put(`/admin/laundry-partners/${editingId}`, editForm); setEditingId(null); await load(); }
+    catch (err) { setError(err.response?.data?.error || "Could not update laundry partner"); }
+    finally { setSubmitting(false); }
+  }
+
   return (
     <AdminLayout title="Laundry Partners">
       <div className="grid md:grid-cols-3 gap-6">
@@ -89,6 +103,7 @@ export default function AdminLaundryPartners() {
                       </button>
                     </td>
                     <td className="p-3">
+                      <button onClick={() => startEdit(p)} className="text-brand-600 text-xs underline mr-3">Edit</button>
                       <button onClick={() => handleDelete(p)} className="text-red-600 text-xs underline">
                         Remove
                       </button>
@@ -101,6 +116,7 @@ export default function AdminLaundryPartners() {
               </tbody>
             </table>
           </div>
+          {editingId && <div className="border rounded-xl p-4 bg-white mt-4"><div className="flex justify-between gap-3 items-center mb-3"><p className="font-semibold">Edit laundry partner</p><button className="text-sm underline" onClick={() => setEditingId(null)}>Cancel</button></div><form onSubmit={saveEdit} className="space-y-3"><input required placeholder="Business name" value={editForm.businessName} onChange={(e) => setEditForm({ ...editForm, businessName: e.target.value })} /><input required placeholder="Contact person's name" value={editForm.contactName} onChange={(e) => setEditForm({ ...editForm, contactName: e.target.value })} /><input required type="email" placeholder="Login email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /><input required placeholder="Phone" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /><input placeholder="Address" value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} /><input type="password" minLength="8" placeholder="New password (leave blank to keep current)" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} />{error && <p className="text-red-600 text-xs">{error}</p>}<button className="dg-button w-full" disabled={submitting}>{submitting ? "Saving…" : "Save partner information"}</button></form></div>}
         </div>
 
         <div className="border rounded-xl p-4 bg-white h-fit">

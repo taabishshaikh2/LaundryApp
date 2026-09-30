@@ -1,5 +1,6 @@
 import express from "express";
 import mongoose from "mongoose";
+import crypto from "crypto";
 import Order, { ORDER_STATUS_LIST } from "../models/Order.js";
 import Garment from "../models/Garment.js";
 import Service from "../models/Service.js";
@@ -17,6 +18,8 @@ import { buildPricingRevision, handoverHasDifferences, latestPricingRevision, pr
 import { initializeProcessing, processingIsReady } from "../utils/processingWorkflow.js";
 
 const router = express.Router();
+
+const deliveryOtpHash = (otp) => crypto.createHmac("sha256", process.env.JWT_SECRET).update(String(otp)).digest("hex");
 
 // Helper: Get flat price for a garment based on service code and speed
 function getGarmentPrice(garment, serviceCode, speed) {
@@ -280,6 +283,31 @@ router.get("/:id", requireAuth, async (req, res) => {
   }
 });
 
+// A customer can generate or replace the delivery code while an order is ready or out for delivery.
+router.post("/:id/delivery-otp", requireAuth, async (req, res) => {
+  try {
+    const orderId = req.params.id.replace(/["'\s]/g, "");
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ error: "Invalid order ID format" });
+    const order = await Order.findOne({ _id: orderId, userId: req.user.id }).select("+deliveryProof.otpHash");
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (!["READY", "OUT_FOR_DELIVERY"].includes(order.status)) {
+      return res.status(409).json({ error: "A delivery code is available once the order is ready" });
+    }
+    const otp = crypto.randomInt(100000, 1000000).toString();
+    const now = new Date();
+    order.deliveryProof.otpHash = deliveryOtpHash(otp);
+    order.deliveryProof.otpGeneratedAt = now;
+    order.deliveryProof.otpExpiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    order.deliveryProof.otpFailedAttempts = 0;
+    const customer = await User.findById(req.user.id).select("name");
+    order.deliveryProof.auditTrail.push({ action: "OTP_GENERATED", changedBy: req.user.id, changedByName: customer?.name || "Customer", changedByRole: "CUSTOMER", note: "Delivery verification code generated", timestamp: now });
+    await order.save();
+    res.json({ otp, expiresAt: order.deliveryProof.otpExpiresAt });
+  } catch (err) {
+    res.status(400).json({ error: "Could not generate delivery code", detail: err.message });
+  }
+});
+
 // ---- Admin ----
 
 router.get("/admin/all", requireAuth, requireAdmin, async (req, res) => {
@@ -340,6 +368,9 @@ router.put("/admin/:id/status", requireAuth, requireAdmin, async (req, res) => {
       }
       if (["READY", "OUT_FOR_DELIVERY", "DELIVERED"].includes(status) && !processingIsReady(order)) {
         return res.status(409).json({ error: "Complete laundry intake, processing stages, quality check, and packing before marking this order ready" });
+      }
+      if (status === "DELIVERED" && !order.deliveryProof?.verifiedAt) {
+        return res.status(409).json({ error: "Verified proof of delivery is required before completing this order" });
       }
       if (status === "PROCESSING") initializeProcessing(order);
       await advanceOrderStatus(order, status, { userId: req.user.id, role: "ADMIN", note });
