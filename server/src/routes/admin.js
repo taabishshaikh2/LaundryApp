@@ -11,11 +11,19 @@ import Issue from "../models/Issue.js";
 import Slot from "../models/Slot.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { buildAnalytics } from "../utils/analytics.js";
+import AuditLog from "../models/AuditLog.js";
+import { requirePermission } from "../middleware/auth.js";
+import { writeAudit } from "../utils/audit.js";
 
 const router = express.Router();
 
 // every route below requires an authenticated admin
 router.use(requireAuth, requireAdmin);
+router.use((req, res, next) => {
+  const section = req.path.split("/").filter(Boolean)[0];
+  const permission = { reports: "REPORTS", "report-options": "REPORTS", customers: "CUSTOMERS", riders: "OPERATIONS", garments: "SETTINGS", services: "SETTINGS", "laundry-partners": "OPERATIONS", notifications: "OPERATIONS", security: "ADMIN_ACCESS" }[section];
+  return permission ? requirePermission(permission)(req, res, next) : next();
+});
 
 // ---- Dashboard summary ----
 router.get("/summary", async (req, res) => {
@@ -65,6 +73,24 @@ router.get("/reports", async (req, res) => {
     const firstOrderByUser = Object.fromEntries(firstOrders.map((row) => [String(row._id), row.firstOrderAt]));
     res.json({ report: buildAnalytics({ orders, issues, slots, firstOrderByUser, from, to }) });
   } catch (err) { res.status(400).json({ error: "Could not build report", detail: err.message }); }
+});
+
+router.get("/security", requirePermission("ADMIN_ACCESS"), async (req, res) => {
+  const [admins, auditLogs] = await Promise.all([
+    User.find({ role: "ADMIN" }).select("name email adminPermissions createdAt").sort({ name: 1 }).lean(),
+    AuditLog.find().sort({ createdAt: -1 }).limit(100).populate("actorId", "name email").lean(),
+  ]);
+  res.json({ admins, auditLogs, retentionDays: Math.max(30, Number(process.env.AUDIT_RETENTION_DAYS || 365)) });
+});
+
+router.put("/security/admins/:id/permissions", requirePermission("ADMIN_ACCESS"), async (req, res) => {
+  const allowed = ["ORDERS", "OPERATIONS", "CUSTOMERS", "PROMOTIONS", "REPORTS", "SETTINGS", "ADMIN_ACCESS"];
+  const permissions = [...new Set(Array.isArray(req.body.permissions) ? req.body.permissions.filter((item) => allowed.includes(item)) : [])];
+  if (String(req.params.id) === req.user.id && !permissions.includes("ADMIN_ACCESS")) return res.status(400).json({ error: "You cannot remove your own admin-access permission" });
+  const admin = await User.findOneAndUpdate({ _id: req.params.id, role: "ADMIN" }, { adminPermissions: permissions }, { new: true }).select("name email adminPermissions");
+  if (!admin) return res.status(404).json({ error: "Admin not found" });
+  await writeAudit(req, "ADMIN_PERMISSIONS_UPDATED", "User", admin._id, { permissions });
+  res.json({ admin });
 });
 
 // ---- Customers ----
@@ -379,7 +405,7 @@ router.delete("/laundry-partners/:id", async (req, res) => {
 
 // ---- Notifications log (WhatsApp messages sent per order) ----
 router.get("/notifications", async (req, res) => {
-  const notifications = await Notification.find()
+  const notifications = await Notification.find({ channel: { $ne: "IN_APP" } })
     .sort({ createdAt: -1 })
     .limit(200)
     .populate("userId", "name phone")

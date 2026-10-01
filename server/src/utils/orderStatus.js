@@ -1,5 +1,6 @@
 import { sendWhatsAppNotification } from "../services/whatsapp.js";
 import { ORDER_STATUS_LIST } from "../models/Order.js";
+import { notifyOrderStatus } from "./inAppNotifications.js";
 
 export { ORDER_STATUS_LIST };
 
@@ -29,6 +30,7 @@ export async function advanceOrderStatus(order, newStatus, { userId, role, note 
   await order.save();
 
   await sendWhatsAppNotification(order, newStatus);
+  await notifyOrderStatus(order, newStatus).catch(() => {});
 
   return order;
 }

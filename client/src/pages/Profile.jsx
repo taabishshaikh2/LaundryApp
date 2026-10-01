@@ -7,6 +7,8 @@ import Input from "../components/ui/Input";
 import Button from "../components/ui/Button";
 import api from "../api";
 import PasswordChange from "../components/PasswordChange";
+import ContactVerification from "../components/ContactVerification";
+import RetentionPanel from "../components/RetentionPanel";
 
 export default function Profile() {
   const { user, refreshUser } = useAuth();
@@ -133,6 +135,8 @@ export default function Profile() {
           </div>
         </Card>
         <Card variant="default" className="mt-4"><PasswordChange /></Card>
+        <Card variant="default" className="mt-4"><ContactVerification /></Card>
+        <Card variant="default" className="mt-4"><RetentionPanel /></Card>
       </div>
     </Layout>
   );

@@ -15,9 +15,15 @@ import slotsRouter from "./routes/slots.js";
 import slotsPublicRouter from "./routes/slotsPublic.js";
 import publicSettingsRouter from "./routes/publicSettings.js";
 import issueRoutes from "./routes/issues.js";
+import notificationRoutes from "./routes/notifications.js";
+import growthRoutes from "./routes/growth.js";
+import crypto from "crypto";
 
 
 const app = express();
+app.set("trust proxy", 1);
+app.disable("x-powered-by");
+app.use((req, res, next) => { req.requestId = crypto.randomUUID(); res.set("X-Request-Id", req.requestId); next(); });
 
 app.use(
   cors({
@@ -27,7 +33,7 @@ app.use(
 // Handover photos are compressed by the client and kept deliberately small.
 app.use(express.json({ limit: "3mb" }));
 
-app.get("/api/health", (req, res) => res.json({ ok: true }));
+app.get("/api/health", (req, res) => res.status(mongoose.connection.readyState === 1 ? 200 : 503).json({ ok: mongoose.connection.readyState === 1, database: mongoose.connection.readyState === 1 ? "connected" : "unavailable", uptimeSeconds: Math.round(process.uptime()), timestamp: new Date().toISOString() }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/garments", garmentRoutes);
@@ -41,10 +47,12 @@ app.use(["/api/admin/slots", "/admin/slots"], slotsRouter);
 app.use("/api/slots", slotsPublicRouter);
 app.use("/api/config", publicSettingsRouter);
 app.use("/api/issues", issueRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/growth", growthRoutes);
 // basic error handler
 app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ error: "Server error" });
+  console.error(JSON.stringify({ level: "error", requestId: req.requestId, method: req.method, path: req.originalUrl, message: err.message, stack: process.env.NODE_ENV === "production" ? undefined : err.stack }));
+  res.status(500).json({ error: "Server error", requestId: req.requestId });
 });
 
 const PORT = process.env.PORT || 5000;

@@ -198,6 +198,7 @@ const orderSchema = new mongoose.Schema(
       line1: String,
       line2: String,
       landmark: String,
+      pincode: String,
     },
     // Speed: REGULAR (24-48hrs) or EXPRESS (1hr, Ironing only)
     speed: { type: String, enum: ["REGULAR", "EXPRESS"], default: "REGULAR" },
@@ -206,6 +207,10 @@ const orderSchema = new mongoose.Schema(
     serviceCode: String, // WASHING, IRONING, DRY_CLEANING
     items: [orderItemSchema],
     subtotal: Number,
+    deliveryCharge: { type: Number, min: 0, default: 0 },
+    discountAmount: { type: Number, min: 0, default: 0 },
+    couponCode: { type: String, uppercase: true, trim: true, default: "" },
+    referralCreditUsed: { type: Number, min: 0, default: 0 },
     taxEnabled: { type: Boolean, default: true },
     taxLabel: { type: String, default: "GST" },
     taxPercent: { type: Number, default: 18 },

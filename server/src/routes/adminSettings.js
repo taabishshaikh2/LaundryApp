@@ -1,11 +1,11 @@
 import express from "express";
-import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 import Settings from "../models/Settings.js";
 import { getBusinessSettings, validateBusinessSettings } from "../config/businessSettings.js";
 
 const router = express.Router();
 
-router.get("/", requireAuth, requireAdmin, async (req, res) => {
+router.get("/", requireAuth, requirePermission("SETTINGS"), async (req, res) => {
   try {
     res.json({ settings: await getBusinessSettings() });
   } catch (error) {
@@ -13,7 +13,7 @@ router.get("/", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-router.put("/", requireAuth, requireAdmin, async (req, res) => {
+router.put("/", requireAuth, requirePermission("SETTINGS"), async (req, res) => {
   try {
     const settings = validateBusinessSettings(req.body?.settings ?? req.body);
     const now = new Date();

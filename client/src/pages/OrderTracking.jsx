@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import api from "../api";
 import { useToast } from "../context/ToastContext";
 import Layout from "../components/Layout";
@@ -141,6 +141,7 @@ export default function OrderTracking() {
         <div className="mt-5"><CustomerDeliveryCode order={order} /></div>
         {order.deliveryProof?.verifiedAt && <Card variant="elevated" className="mt-5"><h3 className="font-semibold text-gray-900 mb-4">Proof of delivery</h3><DeliveryProofDetails proof={order.deliveryProof} /></Card>}
         <CustomerCancellation order={order} onSaved={setOrder} />
+        <div className="mt-5"><Link className="dg-button dg-secondary" to={`/new-order?repeat=${order._id}`}>Repeat this order</Link></div>
         <div className="mt-5"><IssueCenter order={order} /></div>
       </div>
     </Layout>;

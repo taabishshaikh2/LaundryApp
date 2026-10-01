@@ -1,6 +1,6 @@
 import express from "express";
 import mongoose from "mongoose";
-import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 import Slot from "../models/Slot.js";
 import { getBusinessSettings } from "../config/businessSettings.js";
 import { startOfBusinessToday } from "../utils/slotBooking.js";
@@ -22,7 +22,7 @@ function parseSlotInput({ date, timeRange, maxOrders }, defaultCapacity) {
   return { date: parsedDate, timeRange, maxOrders: capacity };
 }
 
-router.get("/", requireAuth, requireAdmin, async (req, res) => {
+router.get("/", requireAuth, requirePermission("OPERATIONS"), async (req, res) => {
   try {
     res.json({ slots: await Slot.find({}).sort({ date: 1, timeRange: 1 }) });
   } catch (error) {
@@ -30,7 +30,7 @@ router.get("/", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-router.post("/", requireAuth, requireAdmin, async (req, res) => {
+router.post("/", requireAuth, requirePermission("OPERATIONS"), async (req, res) => {
   try {
     const settings = await getBusinessSettings();
     const input = parseSlotInput(req.body, settings.DEFAULT_MAX_ORDERS);
@@ -42,7 +42,7 @@ router.post("/", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
+router.put("/:id", requireAuth, requirePermission("OPERATIONS"), async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ error: "Invalid slot ID" });
     const slot = await Slot.findById(req.params.id);
@@ -67,7 +67,7 @@ router.put("/:id", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-router.delete("/:id", requireAuth, requireAdmin, async (req, res) => {
+router.delete("/:id", requireAuth, requirePermission("OPERATIONS"), async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ error: "Invalid slot ID" });
     const slot = await Slot.findById(req.params.id);

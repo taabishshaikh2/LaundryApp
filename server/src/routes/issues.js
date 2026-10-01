@@ -3,7 +3,8 @@ import mongoose from "mongoose";
 import Issue, { ISSUE_CATEGORIES, ISSUE_PRIORITIES, ISSUE_STATUSES } from "../models/Issue.js";
 import Order from "../models/Order.js";
 import User from "../models/User.js";
-import { requireAdmin, requireAuth } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
+import { notifyAdmins, notifyUser } from "../utils/inAppNotifications.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -35,12 +36,12 @@ function customerSafe(issue) {
   return data;
 }
 
-router.get("/admin/owners", requireAdmin, async (req, res) => {
+router.get("/admin/owners", requirePermission("OPERATIONS"), async (req, res) => {
   const owners = await User.find({ role: "ADMIN" }).select("name email").sort({ name: 1 });
   res.json({ owners });
 });
 
-router.get("/admin", requireAdmin, async (req, res) => {
+router.get("/admin", requirePermission("OPERATIONS"), async (req, res) => {
   const query = {};
   if (ISSUE_STATUSES.includes(req.query.status)) query.status = req.query.status;
   if (ISSUE_PRIORITIES.includes(req.query.priority)) query.priority = req.query.priority;
@@ -72,6 +73,7 @@ router.post("/", async (req, res) => {
     if (!order) return res.status(404).json({ error: "Order not found" });
     const who = await actor(req.user.id, "CUSTOMER");
     const issue = await Issue.create({ orderId, userId: req.user.id, category: req.body.category, description, photos: normalizePhotos(req.body.photos), auditTrail: [{ ...who, action: "ISSUE_RAISED", note: description, timestamp: new Date() }] });
+    notifyAdmins({ title: "New customer issue", message: `${req.body.category.replaceAll("_", " ")} reported for order #${orderId.slice(-6).toUpperCase()}.`, type: "ADMIN_ISSUE", orderId, actionUrl: "/admin/issues" }).catch(() => {});
     await issue.populate(evidencePopulate);
     res.status(201).json({ issue });
   } catch (err) { res.status(400).json({ error: err.message || "Could not raise issue" }); }
@@ -104,11 +106,12 @@ router.post("/:id/replies", async (req, res) => {
     issue.auditTrail.push({ ...who, action: visibility === "INTERNAL" ? "INTERNAL_NOTE_ADDED" : "REPLY_ADDED", note: text, timestamp: new Date() });
     if (!isAdmin && issue.status === "AWAITING_CUSTOMER") issue.status = "INVESTIGATING";
     await issue.save();
+    if (isAdmin && visibility === "CUSTOMER") notifyUser(issue.userId, { title: "Support replied", message: "There is a new reply on your order issue.", type: "ISSUE_UPDATE", orderId: issue.orderId, actionUrl: `/orders/${issue.orderId}`, preference: "orderUpdates" }).catch(() => {});
     res.json({ issue: isAdmin ? issue : customerSafe(issue) });
   } catch (err) { res.status(400).json({ error: err.message || "Could not add reply" }); }
 });
 
-router.put("/admin/:id", requireAdmin, async (req, res) => {
+router.put("/admin/:id", requirePermission("OPERATIONS"), async (req, res) => {
   try {
     if (!isValidId(req.params.id)) return res.status(400).json({ error: "Invalid issue ID" });
     const issue = await Issue.findById(cleanId(req.params.id));
@@ -151,6 +154,7 @@ router.put("/admin/:id", requireAdmin, async (req, res) => {
     if (!changes.length) return res.status(400).json({ error: "No changes supplied" });
     issue.auditTrail.push({ ...who, action: "ISSUE_UPDATED", note: changes.join("; "), timestamp: new Date() });
     await issue.save(); await issue.populate(evidencePopulate);
+    notifyUser(issue.userId?._id || issue.userId, { title: "Issue updated", message: `Your issue is now ${issue.status.replaceAll("_", " ").toLowerCase()}.`, type: "ISSUE_UPDATE", orderId: issue.orderId?._id || issue.orderId, actionUrl: `/orders/${issue.orderId?._id || issue.orderId}`, preference: "orderUpdates" }).catch(() => {});
     res.json({ issue });
   } catch (err) { res.status(400).json({ error: err.message || "Could not update issue" }); }
 });

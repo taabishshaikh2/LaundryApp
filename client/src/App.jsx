@@ -28,6 +28,9 @@ import ForgotPassword from "./pages/ForgotPassword";
 import Account from "./pages/Account";
 import AdminIssues from "./pages/AdminIssues";
 import AdminReports from "./pages/AdminReports";
+import Notifications from "./pages/Notifications";
+import AdminGrowth from "./pages/AdminGrowth";
+import AdminSecurity from "./pages/AdminSecurity";
 export default function App() {
   return <AuthProvider>
       <Routes>
@@ -45,6 +48,7 @@ export default function App() {
         <Route path="/orders" element={<ProtectedRoute><OrderHistory /></ProtectedRoute>} />
         <Route path="/orders/:id" element={<ProtectedRoute><OrderTracking /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
 
         <Route path="/rider" element={<ProtectedRoute roles={["RIDER"]}><RiderDashboard /></ProtectedRoute>} />
         <Route path="/partner" element={<ProtectedRoute roles={["LAUNDRY_PARTNER"]}><PartnerDashboard /></ProtectedRoute>} />
@@ -53,6 +57,9 @@ export default function App() {
         <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
         <Route path="/admin/orders" element={<ProtectedRoute adminOnly><AdminOrders /></ProtectedRoute>} />
         <Route path="/admin/reports" element={<ProtectedRoute adminOnly><AdminReports /></ProtectedRoute>} />
+        <Route path="/admin/growth" element={<ProtectedRoute adminOnly><AdminGrowth /></ProtectedRoute>} />
+        <Route path="/admin/alerts" element={<ProtectedRoute adminOnly><Notifications /></ProtectedRoute>} />
+        <Route path="/admin/security" element={<ProtectedRoute adminOnly><AdminSecurity /></ProtectedRoute>} />
         <Route path="/admin/customers" element={<ProtectedRoute adminOnly><AdminCustomers /></ProtectedRoute>} />
         <Route path="/admin/riders" element={<ProtectedRoute adminOnly><AdminRiders /></ProtectedRoute>} />
         <Route path="/admin/pricing" element={<ProtectedRoute adminOnly><AdminPricing /></ProtectedRoute>} />

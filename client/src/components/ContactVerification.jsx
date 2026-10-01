@@ -1,0 +1,10 @@
+import React, { useState } from "react";
+import api from "../api";
+import { useAuth } from "../context/AuthContext";
+
+export default function ContactVerification() {
+  const { user, refreshUser } = useAuth(); const [codes, setCodes] = useState({ EMAIL: "", PHONE: "" }); const [message, setMessage] = useState(""); const [error, setError] = useState("");
+  async function request(channel) { setError(""); try { const { data } = await api.post("/auth/verification/request", { channel }); setMessage(data.developmentCode ? `Pilot verification code: ${data.developmentCode}` : data.message); } catch (err) { setError(err.response?.data?.error || "Could not request a code"); } }
+  async function confirm(channel) { setError(""); try { await api.post("/auth/verification/confirm", { channel, code: codes[channel] }); await refreshUser(); setMessage(`${channel === "EMAIL" ? "Email" : "Phone"} verified.`); } catch (err) { setError(err.response?.data?.error || "Could not verify code"); } }
+  return <div className="dg-verification"><h3>Contact verification</h3><p className="dg-muted">Verify contact details used for account recovery and order updates.</p>{[["EMAIL", user?.email, user?.emailVerified], ["PHONE", user?.phone, user?.phoneVerified]].map(([channel, value, verified]) => <div className="dg-verification-row" key={channel}><div><strong>{channel === "EMAIL" ? "Email" : "Phone"}</strong><p>{value}</p></div>{verified ? <span className="dg-verified">Verified</span> : <><button className="dg-button dg-secondary" onClick={() => request(channel)}>Send code</button><input aria-label={`${channel} verification code`} inputMode="numeric" maxLength="6" placeholder="6-digit code" value={codes[channel]} onChange={(e) => setCodes({ ...codes, [channel]: e.target.value })} /><button className="dg-button" disabled={codes[channel].length !== 6} onClick={() => confirm(channel)}>Verify</button></>}</div>)}{message && <p className="dg-success">{message}</p>}{error && <p className="dg-error">{error}</p>}</div>;
+}

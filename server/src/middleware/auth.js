@@ -20,6 +20,23 @@ export function requireAdmin(req, res, next) {
   next();
 }
 
+export function requirePermission(permission) {
+  return async (req, res, next) => {
+    if (req.user?.role !== "ADMIN") return res.status(403).json({ error: "Admin access required" });
+    try {
+      const { default: User } = await import("../models/User.js");
+      const admin = await User.findById(req.user.id).select("adminPermissions").lean();
+      // Existing admins with no permissions remain full administrators until scoped.
+      if (!admin || (admin.adminPermissions?.length && !admin.adminPermissions.includes(permission))) {
+        return res.status(403).json({ error: `Missing admin permission: ${permission}` });
+      }
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
 export function requireRole(...roles) {
   return (req, res, next) => {
     if (!roles.includes(req.user?.role)) {

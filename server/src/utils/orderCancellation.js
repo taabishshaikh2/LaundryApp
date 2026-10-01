@@ -1,5 +1,8 @@
 import { releaseSlotReservation } from "./slotBooking.js";
 import { actorDetails } from "./handover.js";
+import Coupon from "../models/Coupon.js";
+import User from "../models/User.js";
+import { notifyOrderStatus } from "./inAppNotifications.js";
 
 export const CUSTOMER_CANCELLABLE_STATUSES = ["ORDER_PLACED", "PICKUP_ASSIGNED", "RIDER_ON_THE_WAY"];
 export const REFUND_STATUSES = ["NOT_REQUIRED", "PENDING", "APPROVED", "REJECTED", "PROCESSED"];
@@ -37,7 +40,10 @@ export async function cancelOrder(order, { userId, role, reason, session }) {
     }
     order.slotReservationReleasedAt = now;
   }
+  if (order.couponCode) await Coupon.updateOne({ code: order.couponCode, usedCount: { $gt: 0 } }, { $inc: { usedCount: -1 } }, { session });
+  if (order.referralCreditUsed > 0) await User.updateOne({ _id: order.userId }, { $inc: { referralCredit: order.referralCreditUsed } }, { session });
   await order.save({ session });
+  notifyOrderStatus(order, "CANCELLED").catch(() => {});
   return true;
 }
 

@@ -1,0 +1,13 @@
+import React, { useEffect, useState } from "react";
+import api from "../api";
+import AdminLayout from "../components/AdminLayout";
+
+const permissions = ["ORDERS", "OPERATIONS", "CUSTOMERS", "PROMOTIONS", "REPORTS", "SETTINGS", "ADMIN_ACCESS"];
+export default function AdminSecurity() {
+  const [data, setData] = useState({ admins: [], auditLogs: [], retentionDays: 365 }); const [error, setError] = useState("");
+  async function load() { const response = await api.get("/admin/security"); setData(response.data); }
+  useEffect(() => { load().catch((err) => setError(err.response?.data?.error || "Could not load security controls")); }, []);
+  async function toggle(admin, permission) { const current = admin.adminPermissions?.length ? admin.adminPermissions : permissions; const next = current.includes(permission) ? current.filter((item) => item !== permission) : [...current, permission]; try { await api.put(`/admin/security/admins/${admin._id}/permissions`, { permissions: next }); await load(); } catch (err) { setError(err.response?.data?.error || "Could not update permissions"); } }
+  return <AdminLayout title="Security & audit"><div className="dg-security"><section className="dg-card"><p className="dg-eyebrow">ADMIN ACCESS</p><h2>Permission controls</h2><p className="dg-muted mb-4">Admins with no selected permissions are legacy full administrators. Select permissions to scope an account.</p>{data.admins.map((admin) => <article className="dg-admin-permissions" key={admin._id}><div><strong>{admin.name}</strong><p>{admin.email}</p></div><div className="dg-permission-grid">{permissions.map((permission) => <label key={permission}><input type="checkbox" checked={(admin.adminPermissions?.length ? admin.adminPermissions : permissions).includes(permission)} onChange={() => toggle(admin, permission)} /> {permission.replaceAll("_", " ")}</label>)}</div></article>)}</section><section className="dg-card"><p className="dg-eyebrow">AUDIT LOG</p><h2>Recent sensitive changes</h2><p className="dg-muted mb-4">Records automatically expire after {data.retentionDays} days.</p><p className="dg-table-hint">Swipe sideways to see all audit details.</p><div className="dg-table-scroll"><table><thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Record</th><th>IP</th></tr></thead><tbody>{data.auditLogs.map((row) => <tr key={row._id}><td>{new Date(row.createdAt).toLocaleString("en-IN")}</td><td>{row.actorId?.name || row.actorRole}</td><td>{row.action.replaceAll("_", " ")}</td><td>{row.entityType} {row.entityId}</td><td>{row.ip || "—"}</td></tr>)}</tbody></table></div></section>{error && <p className="dg-error">{error}</p>}</div></AdminLayout>;
+}
+

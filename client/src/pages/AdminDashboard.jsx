@@ -53,6 +53,9 @@ export default function AdminDashboard() {
             <QuickLink to="/admin/laundry-partners" title="Laundry Partners" desc="Add/remove partner locations" icon="🏪" />
             <QuickLink to="/admin/customers" title="Customers" desc="View registered customers" icon="👤" />
             <QuickLink to="/admin/riders" title="Riders" desc="Manage rider accounts" icon="🛵" />
+            <QuickLink to="/admin/growth" title="Areas & Promotions" desc="Pincodes, delivery charges and coupons" icon="🎁" />
+            <QuickLink to="/admin/alerts" title="Admin Alerts" desc="Unread operational notifications" icon="🔔" />
+            <QuickLink to="/admin/security" title="Security & Audit" desc="Permissions and retained audit history" icon="🔐" />
           </div>
         </div>
 

@@ -11,11 +11,13 @@ client/.env
 client/.env.*
 server/.env
 server/.env.*
+!server/.env.example
 
 # Production build output
 dist/
 client/dist/
 server/dist/
+server/backups/
 
 # Logs
 *.log

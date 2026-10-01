@@ -6,8 +6,7 @@ import Garment from "../models/Garment.js";
 import Service from "../models/Service.js";
 import User from "../models/User.js";
 import LaundryPartner from "../models/LaundryPartner.js";
-import Notification from "../models/Notification.js";
-import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { advanceOrderStatus } from "../utils/orderStatus.js";
 import { sendWhatsAppNotification } from "../services/whatsapp.js";
 import { getBusinessSettings } from "../config/businessSettings.js";
@@ -16,6 +15,9 @@ import { actorDetails, handoverSummary, normalizeHandoverItems } from "../utils/
 import { cancelOrder, REFUND_STATUSES } from "../utils/orderCancellation.js";
 import { buildPricingRevision, handoverHasDifferences, latestPricingRevision, pricingIsResolved } from "../utils/pricingRevision.js";
 import { initializeProcessing, processingIsReady } from "../utils/processingWorkflow.js";
+import ServiceArea from "../models/ServiceArea.js";
+import Coupon from "../models/Coupon.js";
+import { notifyAdmins, notifyUser } from "../utils/inAppNotifications.js";
 
 const router = express.Router();
 
@@ -45,9 +47,12 @@ function getGarmentPrice(garment, serviceCode, speed) {
 router.post("/", requireAuth, async (req, res) => {
   try {
     const { address, speed, items, serviceId, pickupSlot, deliverySlot } = req.body;
-    if (!address?.line1 || !Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: "Address and at least one item are required" });
+    const pincode = String(address?.pincode || "").replace(/\D/g, "");
+    if (!address?.line1 || pincode.length !== 6 || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "Address, 6-digit pincode, and at least one item are required" });
     }
+    const serviceArea = await ServiceArea.findOne({ pincode, active: true });
+    if (!serviceArea) return res.status(400).json({ error: "Pickup is not available for this pincode yet", code: "OUTSIDE_SERVICE_AREA" });
     if (!serviceId) {
       return res.status(400).json({ error: "A laundry service (Washing/Ironing/Dry Cleaning) is required" });
     }
@@ -109,10 +114,29 @@ router.post("/", requireAuth, async (req, res) => {
         subtotal,
       });
     }
+    let discountAmount = 0;
+    let coupon = null;
+    const couponCode = String(req.body.couponCode || "").trim().toUpperCase();
+    if (couponCode) {
+      coupon = await Coupon.findOne({ code: couponCode, active: true });
+      const now = new Date();
+      if (!coupon || coupon.startsAt > now || (coupon.expiresAt && coupon.expiresAt < now)) return res.status(400).json({ error: "This coupon is invalid or expired" });
+      if (subtotal < coupon.minimumOrder) return res.status(400).json({ error: `This coupon requires an order of at least ₹${coupon.minimumOrder}` });
+      if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) return res.status(400).json({ error: "This coupon has reached its usage limit" });
+      const previousUses = await Order.countDocuments({ userId: req.user.id, couponCode, status: { $ne: "CANCELLED" } });
+      if (previousUses >= coupon.perCustomerLimit) return res.status(400).json({ error: "You have already used this coupon" });
+      const rawDiscount = coupon.discountType === "PERCENT" ? subtotal * coupon.discountValue / 100 : coupon.discountValue;
+      discountAmount = Math.round(Math.min(subtotal, coupon.maxDiscount > 0 ? Math.min(rawDiscount, coupon.maxDiscount) : rawDiscount) * 100) / 100;
+    }
+    const customer = await User.findById(req.user.id);
+    const requestedCredit = Math.max(0, Number(req.body.referralCredit || 0));
+    const referralCreditUsed = Math.round(Math.min(requestedCredit, customer?.referralCredit || 0, Math.max(0, subtotal - discountAmount)) * 100) / 100;
+    const deliveryCharge = Number(serviceArea.deliveryCharge || 0);
+    const taxableSubtotal = Math.max(0, subtotal - discountAmount - referralCreditUsed);
     const taxEnabled = settings.TAX_ENABLED;
     const taxPercent = taxEnabled ? settings.TAX_PERCENT : 0;
-    const gstAmount = Math.round(subtotal * taxPercent) / 100;
-    const total = Math.round((subtotal + gstAmount) * 100) / 100;
+    const gstAmount = Math.round(taxableSubtotal * taxPercent) / 100;
+    const total = Math.round((taxableSubtotal + gstAmount + deliveryCharge) * 100) / 100;
 
     const orderData = {
       userId: req.user.id,
@@ -125,6 +149,10 @@ router.post("/", requireAuth, async (req, res) => {
       deliverySlot: deliverySlot || null,
       items: orderItems,
       subtotal,
+      deliveryCharge,
+      discountAmount,
+      couponCode,
+      referralCreditUsed,
       taxEnabled,
       taxLabel: settings.TAX_LABEL,
       taxPercent,
@@ -157,6 +185,8 @@ router.post("/", requireAuth, async (req, res) => {
         if (pickupSlot) await reserveSlot(pickupSlot, session);
         if (deliverySlot && String(deliverySlot) !== String(pickupSlot)) await reserveSlot(deliverySlot, session);
         [order] = await Order.create([orderData], { session });
+        if (coupon) await Coupon.updateOne({ _id: coupon._id }, { $inc: { usedCount: 1 } }, { session });
+        if (referralCreditUsed) await User.updateOne({ _id: req.user.id }, { $inc: { referralCredit: -referralCreditUsed } }, { session });
       });
     } finally {
       await session.endSession();
@@ -167,22 +197,8 @@ router.post("/", requireAuth, async (req, res) => {
     // fire-and-forget: don't block the response on the notification write
     sendWhatsAppNotification(order, "ORDER_PLACED").catch(() => {});
 
-    // Notify admins of new order
-    try {
-      const admins = await User.find({ role: "ADMIN" });
-      const notificationPromises = admins.map((admin) =>
-        Notification.create({
-          userId: admin._id,
-          title: "New Order Received",
-          message: `Order #${order._id.toString().slice(-6).toUpperCase()} from ${req.user.name || "a customer"} has arrived.`,
-          type: "order_created",
-          orderId: order._id,
-        })
-      );
-      await Promise.all(notificationPromises);
-    } catch (notifyError) {
-      console.error("Failed to create admin notifications:", notifyError);
-    }
+    notifyAdmins({ title: "New order received", message: `Order #${order._id.toString().slice(-6).toUpperCase()} needs review.`, type: "ADMIN_ORDER", orderId: order._id, actionUrl: "/admin/orders" }).catch(() => {});
+    notifyUser(req.user.id, { title: "Order placed", message: "Your pickup request has been received.", type: "ORDER_UPDATE", orderId: order._id, actionUrl: `/orders/${order._id}` }).catch(() => {});
   } catch (err) {
     const status = err instanceof SlotBookingError ? err.statusCode : 400;
     res.status(status).json({
@@ -310,7 +326,7 @@ router.post("/:id/delivery-otp", requireAuth, async (req, res) => {
 
 // ---- Admin ----
 
-router.get("/admin/all", requireAuth, requireAdmin, async (req, res) => {
+router.get("/admin/all", requireAuth, requirePermission("ORDERS"), async (req, res) => {
   const orders = await Order.find()
     .sort({ createdAt: -1 })
     .populate("userId", "name phone email")
@@ -321,7 +337,7 @@ router.get("/admin/all", requireAuth, requireAdmin, async (req, res) => {
 });
 
 // Admin status update - FIXED
-router.put("/admin/:id/status", requireAuth, requireAdmin, async (req, res) => {
+router.put("/admin/:id/status", requireAuth, requirePermission("ORDERS"), async (req, res) => {
   try {
     // Sanitize the ID - remove any quotes or whitespace
     const orderId = req.params.id.replace(/["'\s]/g, "");
@@ -382,7 +398,7 @@ router.put("/admin/:id/status", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-router.put("/admin/:id/handover", requireAuth, requireAdmin, async (req, res) => {
+router.put("/admin/:id/handover", requireAuth, requirePermission("ORDERS"), async (req, res) => {
   try {
     const orderId = req.params.id.replace(/["'\s]/g, "");
     if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ error: "Invalid order ID format" });
@@ -411,7 +427,7 @@ router.put("/admin/:id/handover", requireAuth, requireAdmin, async (req, res) =>
   }
 });
 
-router.put("/admin/:id/refund", requireAuth, requireAdmin, async (req, res) => {
+router.put("/admin/:id/refund", requireAuth, requirePermission("ORDERS"), async (req, res) => {
   try {
     const orderId = req.params.id.replace(/["'\s]/g, "");
     if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ error: "Invalid order ID format" });
@@ -439,7 +455,7 @@ router.put("/admin/:id/refund", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-router.post("/admin/:id/pricing-revision", requireAuth, requireAdmin, async (req, res) => {
+router.post("/admin/:id/pricing-revision", requireAuth, requirePermission("ORDERS"), async (req, res) => {
   try {
     const orderId = req.params.id.replace(/["'\s]/g, "");
     if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ error: "Invalid order ID format" });
@@ -475,7 +491,7 @@ router.post("/admin/:id/pricing-revision", requireAuth, requireAdmin, async (req
 });
 
 // Assign a rider - FIXED
-router.put("/admin/:id/assign-rider", requireAuth, requireAdmin, async (req, res) => {
+router.put("/admin/:id/assign-rider", requireAuth, requirePermission("ORDERS"), async (req, res) => {
   try {
     // Sanitize the ID - remove any quotes or whitespace
     const orderId = req.params.id.replace(/["'\s]/g, "");
@@ -494,6 +510,7 @@ router.put("/admin/:id/assign-rider", requireAuth, requireAdmin, async (req, res
 
     order.riderId = rider._id;
     await order.save();
+    notifyUser(rider._id, { title: "New pickup assigned", message: `Order #${String(order._id).slice(-6).toUpperCase()} is ready in your rider workspace.`, type: "RIDER_ASSIGNMENT", orderId: order._id, actionUrl: "/rider", preference: "riderAssignments" }).catch(() => {});
 
     if (order.status === "ORDER_PLACED") {
       await advanceOrderStatus(order, "PICKUP_ASSIGNED", {
@@ -510,7 +527,7 @@ router.put("/admin/:id/assign-rider", requireAuth, requireAdmin, async (req, res
 });
 
 // Assign a laundry partner - FIXED
-router.put("/admin/:id/assign-partner", requireAuth, requireAdmin, async (req, res) => {
+router.put("/admin/:id/assign-partner", requireAuth, requirePermission("ORDERS"), async (req, res) => {
   try {
     // Sanitize the ID - remove any quotes or whitespace
     const orderId = req.params.id.replace(/["'\s]/g, "");
@@ -529,6 +546,7 @@ router.put("/admin/:id/assign-partner", requireAuth, requireAdmin, async (req, r
 
     order.partnerId = partner._id;
     await order.save();
+    notifyUser(partner.userId, { title: "New laundry order assigned", message: `Order #${String(order._id).slice(-6).toUpperCase()} is ready in your partner workspace.`, type: "PARTNER_ASSIGNMENT", orderId: order._id, actionUrl: "/partner", preference: "orderUpdates" }).catch(() => {});
 
     if (order.status === "PICKED_UP") {
       if (pricingIsResolved(order)) {
@@ -548,7 +566,7 @@ router.put("/admin/:id/assign-partner", requireAuth, requireAdmin, async (req, r
 });
 
 // Assign rider and set delivery method (STANDARD/EXPRESS) - NEW
-router.put("/admin/:id/assign", requireAuth, requireAdmin, async (req, res) => {
+router.put("/admin/:id/assign", requireAuth, requirePermission("ORDERS"), async (req, res) => {
   try {
     // Sanitize the ID - remove any quotes or whitespace
     const orderId = req.params.id.replace(/["'\s]/g, "");
@@ -580,6 +598,7 @@ router.put("/admin/:id/assign", requireAuth, requireAdmin, async (req, res) => {
     if (deliveryMethod !== undefined) order.deliveryMethod = deliveryMethod;
 
     await order.save();
+    if (riderId) notifyUser(riderId, { title: "New pickup assigned", message: `Order #${String(order._id).slice(-6).toUpperCase()} is ready in your rider workspace.`, type: "RIDER_ASSIGNMENT", orderId: order._id, actionUrl: "/rider", preference: "riderAssignments" }).catch(() => {});
 
     // If order was just placed and now has a rider, advance status to PICKUP_ASSIGNED
     if (order.status === "ORDER_PLACED" && riderId) {

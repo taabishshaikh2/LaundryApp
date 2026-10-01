@@ -59,6 +59,12 @@ export function buildAnalytics({ orders, issues, slots, firstOrderByUser, from, 
   const qualityFailures = orders.reduce((sum, order) => sum + (order.processing?.auditTrail || []).filter((entry) => entry.action === "QUALITY_FAILED").length, 0);
   const processingIssues = orders.reduce((sum, order) => sum + (order.processing?.stages || []).filter((stage) => stage.issueType).length, 0);
   const intakeDiscrepancies = orders.filter((order) => order.processing?.intake?.status === "DISCREPANCY").length;
+  const garmentCountDifferences = orders.filter((order) => {
+    if (!order.handover?.confirmedAt) return false;
+    const ordered = (order.items || []).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const received = (order.handover.items || []).reduce((sum, item) => sum + Number(item.receivedQuantity || 0), 0);
+    return ordered !== received;
+  }).length;
   const garmentClaims = issues.filter((issue) => ["MISSING_GARMENT", "DAMAGED_GARMENT", "STAIN_REMAINING"].includes(issue.category)).length;
 
   return {
@@ -66,7 +72,7 @@ export function buildAnalytics({ orders, issues, slots, firstOrderByUser, from, 
     totals: { orders: orders.length, activeOrders: orders.filter((order) => !["DELIVERED", "CANCELLED"].includes(order.status)).length, deliveredOrders: delivered.length, cancelledOrders: orders.filter((order) => order.status === "CANCELLED").length, garments: garmentCount, revenue: round(revenue), refunds: round(refunds), netRevenue: round(revenue - refunds), averageOrderValue: nonCancelled.length ? round(revenue / nonCancelled.length) : 0, cancellationRate: orders.length ? round(orders.filter((order) => order.status === "CANCELLED").length / orders.length * 100, 1) : 0 },
     customers: { unique: customerIds.length, new: newCustomers, repeat: Math.max(0, customerIds.length - newCustomers) },
     issues: { total: issues.length, open: issueOpen, overdue: issueOverdue, resolved: issues.filter((issue) => ["RESOLVED", "CLOSED"].includes(issue.status)).length, categories: issueCategories },
-    quality: { qualityFailures, processingIssues, intakeDiscrepancies, garmentClaims, claimsPer100Deliveries: delivered.length ? round(garmentClaims / delivered.length * 100, 1) : 0 },
+    quality: { qualityFailures, processingIssues, intakeDiscrepancies, garmentCountDifferences, garmentClaims, claimsPer100Deliveries: delivered.length ? round(garmentClaims / delivered.length * 100, 1) : 0 },
     slots: { capacity: slotCapacity, booked: slotBookings, utilization: slotCapacity ? round(slotBookings / slotCapacity * 100, 1) : 0, rows: slots.map((slot) => ({ id: idOf(slot), date: slot.date, timeRange: slot.timeRange, capacity: slot.maxOrders, booked: slot.bookedCount, utilization: slot.maxOrders ? round(slot.bookedCount / slot.maxOrders * 100, 1) : 0 })) },
     trends: [...daily.values()].map((row) => ({ ...row, revenue: round(row.revenue) })), services: services.map((row) => ({ ...row, revenue: round(row.revenue) })), garments: garments.map((row) => ({ ...row, revenue: round(row.revenue) })), statuses, riders, partners,
   };
