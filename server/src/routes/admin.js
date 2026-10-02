@@ -14,6 +14,7 @@ import { buildAnalytics } from "../utils/analytics.js";
 import AuditLog from "../models/AuditLog.js";
 import { requirePermission } from "../middleware/auth.js";
 import { writeAudit } from "../utils/audit.js";
+import { revokeAllSessions } from "../utils/authSessions.js";
 
 const router = express.Router();
 
@@ -76,11 +77,12 @@ router.get("/reports", async (req, res) => {
 });
 
 router.get("/security", requirePermission("ADMIN_ACCESS"), async (req, res) => {
-  const [admins, auditLogs] = await Promise.all([
+  const [admins, users, auditLogs] = await Promise.all([
     User.find({ role: "ADMIN" }).select("name email adminPermissions createdAt").sort({ name: 1 }).lean(),
+    User.find().select("name email phone role emailVerifiedAt phoneVerifiedAt createdAt").sort({ name: 1 }).lean(),
     AuditLog.find().sort({ createdAt: -1 }).limit(100).populate("actorId", "name email").lean(),
   ]);
-  res.json({ admins, auditLogs, retentionDays: Math.max(30, Number(process.env.AUDIT_RETENTION_DAYS || 365)) });
+  res.json({ admins, users, auditLogs, retentionDays: Math.max(30, Number(process.env.AUDIT_RETENTION_DAYS || 365)) });
 });
 
 router.put("/security/admins/:id/permissions", requirePermission("ADMIN_ACCESS"), async (req, res) => {
@@ -91,6 +93,55 @@ router.put("/security/admins/:id/permissions", requirePermission("ADMIN_ACCESS")
   if (!admin) return res.status(404).json({ error: "Admin not found" });
   await writeAudit(req, "ADMIN_PERMISSIONS_UPDATED", "User", admin._id, { permissions });
   res.json({ admin });
+});
+
+router.put("/security/users/:id/role", requirePermission("ADMIN_ACCESS"), async (req, res) => {
+  try {
+    const allowedRoles = ["CUSTOMER", "RIDER", "LAUNDRY_PARTNER", "ADMIN"];
+    const nextRole = String(req.body.role || "").toUpperCase();
+    if (!allowedRoles.includes(nextRole)) return res.status(400).json({ error: "Choose a valid account role" });
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ error: "Invalid user ID" });
+    if (String(req.params.id) === String(req.user.id)) return res.status(400).json({ error: "You cannot change your own role" });
+    const account = await User.findById(req.params.id).select("+sessionVersion +twoFactor.secret");
+    if (!account) return res.status(404).json({ error: "User not found" });
+    if (account.role === nextRole) return res.json({ user: account });
+    if (account.role === "ADMIN") {
+      const adminCount = await User.countDocuments({ role: "ADMIN" });
+      if (adminCount <= 1) return res.status(409).json({ error: "The final administrator cannot be demoted" });
+    }
+    if (account.role === "RIDER") {
+      const activeAssignments = await Order.countDocuments({ riderId: account._id, status: { $nin: ["DELIVERED", "CANCELLED"] } });
+      if (activeAssignments) return res.status(409).json({ error: "Reassign this rider's active orders before changing their role" });
+    }
+    const existingPartner = await LaundryPartner.findOne({ userId: account._id });
+    if (account.role === "LAUNDRY_PARTNER" && existingPartner) {
+      const activePartnerOrders = await Order.countDocuments({ partnerId: existingPartner._id, status: { $nin: ["DELIVERED", "CANCELLED"] } });
+      if (activePartnerOrders) return res.status(409).json({ error: "Reassign this partner's active orders before changing their role" });
+      existingPartner.active = false;
+      await existingPartner.save();
+    }
+    if (nextRole === "LAUNDRY_PARTNER") {
+      const businessName = String(req.body.businessName || "").trim();
+      if (businessName.length < 2) return res.status(400).json({ error: "Business name is required for a laundry partner" });
+      await LaundryPartner.findOneAndUpdate(
+        { userId: account._id },
+        { businessName, phone: account.phone, address: String(req.body.address || "").trim(), active: true },
+        { new: true, upsert: true, runValidators: true }
+      );
+    }
+    const fullAdminPermissions = ["ORDERS", "OPERATIONS", "CUSTOMERS", "PROMOTIONS", "REPORTS", "SETTINGS", "ADMIN_ACCESS"];
+    const previousRole = account.role;
+    account.role = nextRole;
+    account.adminPermissions = nextRole === "ADMIN" ? fullAdminPermissions : [];
+    if (nextRole !== "ADMIN") account.twoFactor = { enabled: false, secret: "", enabledAt: null };
+    account.sessionVersion = Number(account.sessionVersion || 0) + 1;
+    await account.save();
+    await revokeAllSessions(account._id);
+    await writeAudit(req, "USER_ROLE_CHANGED", "User", account._id, { previousRole, nextRole });
+    res.json({ user: { id: account._id, name: account.name, email: account.email, role: account.role } });
+  } catch (error) {
+    res.status(400).json({ error: error.message || "Could not change account role" });
+  }
 });
 
 // ---- Customers ----
@@ -145,7 +196,7 @@ router.put("/riders/:id", async (req, res) => {
     }
 
     const { name, email, phone, password } = req.body;
-    const rider = await User.findOne({ _id: riderId, role: "RIDER" });
+    const rider = await User.findOne({ _id: riderId, role: "RIDER" }).select("+sessionVersion");
     if (!rider) return res.status(404).json({ error: "Rider not found" });
     if (email && email.toLowerCase() !== rider.email) {
       const duplicate = await User.findOne({ email: email.toLowerCase(), _id: { $ne: rider._id } });
@@ -157,8 +208,10 @@ router.put("/riders/:id", async (req, res) => {
     if (password) {
       if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters" });
       rider.passwordHash = await bcrypt.hash(password, 10);
+      rider.sessionVersion = Number(rider.sessionVersion || 0) + 1;
     }
     await rider.save();
+    if (password) await revokeAllSessions(rider._id);
     const safeRider = rider.toObject();
     delete safeRider.passwordHash;
     res.json({ rider: safeRider });
@@ -358,7 +411,7 @@ router.put("/laundry-partners/:id", async (req, res) => {
     const { businessName, contactName, email, phone, password, address, servicesOffered, active } = req.body;
     const partner = await LaundryPartner.findById(partnerId);
     if (!partner) return res.status(404).json({ error: "Laundry partner not found" });
-    const user = partner.userId ? await User.findById(partner.userId) : null;
+    const user = partner.userId ? await User.findById(partner.userId).select("+sessionVersion") : null;
     if (!user) return res.status(404).json({ error: "Partner login account not found" });
     if (email && email.toLowerCase() !== user.email) {
       const duplicate = await User.findOne({ email: email.toLowerCase(), _id: { $ne: user._id } });
@@ -370,6 +423,7 @@ router.put("/laundry-partners/:id", async (req, res) => {
     if (password) {
       if (password.length < 8) return res.status(400).json({ error: "Password must be at least 8 characters" });
       user.passwordHash = await bcrypt.hash(password, 10);
+      user.sessionVersion = Number(user.sessionVersion || 0) + 1;
     }
     if (businessName !== undefined) partner.businessName = String(businessName).trim();
     if (phone !== undefined) partner.phone = String(phone).trim();
@@ -377,6 +431,7 @@ router.put("/laundry-partners/:id", async (req, res) => {
     if (servicesOffered !== undefined) partner.servicesOffered = servicesOffered;
     if (active !== undefined) partner.active = active;
     await Promise.all([user.save(), partner.save()]);
+    if (password) await revokeAllSessions(user._id);
     res.json({ partner: { ...partner.toObject(), userId: { _id: user._id, name: user.name, email: user.email, phone: user.phone } } });
   } catch (err) {
     res.status(400).json({ error: "Could not update partner", detail: err.message });

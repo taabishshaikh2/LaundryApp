@@ -30,27 +30,39 @@ export function AuthProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function storeSession(data) {
+    localStorage.setItem("dg_token", data.token);
+    localStorage.setItem("dg_refresh_token", data.refreshToken);
+    setUser(data.user);
+    return data.user;
+  }
+
   async function login(email, password) {
     const res = await api.post("/auth/login", { email, password });
-    localStorage.setItem("dg_token", res.data.token);
-    setUser(res.data.user);
-    return res.data.user;
+    if (res.data.requiresTwoFactor) return res.data;
+    return storeSession(res.data);
+  }
+
+  async function verifyTwoFactor(challengeToken, code) {
+    const res = await api.post("/auth/2fa/verify-login", { challengeToken, code });
+    return storeSession(res.data);
   }
 
   async function register(name, email, phone, password) {
     const res = await api.post("/auth/register", { name, email, phone, password });
-    localStorage.setItem("dg_token", res.data.token);
-    setUser(res.data.user);
-    return res.data.user;
+    return storeSession(res.data);
   }
 
   function logout() {
+    const refreshToken = localStorage.getItem("dg_refresh_token");
+    if (refreshToken) api.post("/auth/logout", { refreshToken }).catch(() => {});
     localStorage.removeItem("dg_token");
+    localStorage.removeItem("dg_refresh_token");
     setUser(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, verifyTwoFactor, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

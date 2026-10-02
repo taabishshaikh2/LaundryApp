@@ -9,7 +9,7 @@ const notificationSchema = new mongoose.Schema(
     type: { type: String, trim: true, maxlength: 60, default: "GENERAL" },
     templateName: String,
     message: String,
-    status: { type: String, enum: ["QUEUED", "SENT", "FAILED"], default: "QUEUED" },
+    status: { type: String, enum: ["QUEUED", "SENT", "FAILED", "SKIPPED"], default: "QUEUED" },
     sentAt: Date,
     readAt: { type: Date, default: null },
     actionUrl: { type: String, trim: true, maxlength: 240, default: "" },

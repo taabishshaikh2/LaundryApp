@@ -37,7 +37,7 @@ router.get("/preferences", async (req, res) => {
 });
 
 router.put("/preferences", async (req, res) => {
-  const allowed = ["orderUpdates", "riderAssignments", "promotions", "adminAlerts"];
+  const allowed = ["orderUpdates", "riderAssignments", "promotions", "adminAlerts", "emailAlerts", "whatsAppAlerts"];
   const updates = {};
   for (const key of allowed) if (typeof req.body[key] === "boolean") updates[`notificationPreferences.${key}`] = req.body[key];
   const user = await User.findByIdAndUpdate(req.user.id, { $set: updates }, { new: true }).select("notificationPreferences");

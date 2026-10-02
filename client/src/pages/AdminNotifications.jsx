@@ -12,9 +12,7 @@ export default function AdminNotifications() {
   return (
     <AdminLayout title="Notifications log">
       <p className="text-sm text-gray-500 mb-4">
-        Every WhatsApp-style message the system has sent, newest first. Real WhatsApp Business API
-        credentials aren't configured yet — these are logged and simulated as "Sent" so the flow can be
-        tested end-to-end (see <code className="bg-gray-100 px-1 rounded dg-break-text">server/src/services/whatsapp.js</code>).
+        WhatsApp and email delivery attempts are recorded here. A skipped status means the matching provider credentials are not configured yet.
       </p>
       <p className="dg-table-hint">Swipe sideways to view complete notification details.</p>
       <div className="border rounded-xl bg-white dg-table-scroll" role="region" aria-label="Notifications table" tabIndex="0">
@@ -24,6 +22,7 @@ export default function AdminNotifications() {
               <th className="p-3">Order</th>
               <th className="p-3">Customer</th>
               <th className="p-3">Template</th>
+              <th className="p-3">Channel</th>
               <th className="p-3">Message</th>
               <th className="p-3">Status</th>
               <th className="p-3">Sent</th>
@@ -35,6 +34,7 @@ export default function AdminNotifications() {
                 <td className="p-3">#{n.orderId?._id?.slice(-6).toUpperCase() || "—"}</td>
                 <td className="p-3">{n.userId?.name}</td>
                 <td className="p-3 text-xs">{n.templateName}</td>
+                <td className="p-3 text-xs">{n.channel}</td>
                 <td className="p-3 text-xs max-w-xs">{n.message}</td>
                 <td className="p-3">
                   <span
@@ -55,7 +55,7 @@ export default function AdminNotifications() {
               </tr>
             ))}
             {notifications.length === 0 && (
-              <tr><td colSpan={6} className="p-6 text-center text-gray-400">No notifications sent yet</td></tr>
+              <tr><td colSpan={7} className="p-6 text-center text-gray-400">No notifications sent yet</td></tr>
             )}
           </tbody>
         </table>

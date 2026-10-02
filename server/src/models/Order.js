@@ -199,6 +199,8 @@ const orderSchema = new mongoose.Schema(
       line2: String,
       landmark: String,
       pincode: String,
+      lat: Number,
+      lng: Number,
     },
     // Speed: REGULAR (24-48hrs) or EXPRESS (1hr, Ironing only)
     speed: { type: String, enum: ["REGULAR", "EXPRESS"], default: "REGULAR" },

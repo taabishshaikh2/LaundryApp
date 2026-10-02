@@ -9,6 +9,7 @@ import api from "../api";
 import PasswordChange from "../components/PasswordChange";
 import ContactVerification from "../components/ContactVerification";
 import RetentionPanel from "../components/RetentionPanel";
+import PrivacyPanel from "../components/PrivacyPanel";
 
 export default function Profile() {
   const { user, refreshUser } = useAuth();
@@ -137,6 +138,7 @@ export default function Profile() {
         <Card variant="default" className="mt-4"><PasswordChange /></Card>
         <Card variant="default" className="mt-4"><ContactVerification /></Card>
         <Card variant="default" className="mt-4"><RetentionPanel /></Card>
+        <Card variant="default" className="mt-4"><PrivacyPanel /></Card>
       </div>
     </Layout>
   );

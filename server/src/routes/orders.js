@@ -18,6 +18,7 @@ import { initializeProcessing, processingIsReady } from "../utils/processingWork
 import ServiceArea from "../models/ServiceArea.js";
 import Coupon from "../models/Coupon.js";
 import { notifyAdmins, notifyUser } from "../utils/inAppNotifications.js";
+import { notifyAdminsExternally } from "../services/adminAlerts.js";
 
 const router = express.Router();
 
@@ -198,6 +199,7 @@ router.post("/", requireAuth, async (req, res) => {
     sendWhatsAppNotification(order, "ORDER_PLACED").catch(() => {});
 
     notifyAdmins({ title: "New order received", message: `Order #${order._id.toString().slice(-6).toUpperCase()} needs review.`, type: "ADMIN_ORDER", orderId: order._id, actionUrl: "/admin/orders" }).catch(() => {});
+    notifyAdminsExternally(order).catch(() => {});
     notifyUser(req.user.id, { title: "Order placed", message: "Your pickup request has been received.", type: "ORDER_UPDATE", orderId: order._id, actionUrl: `/orders/${order._id}` }).catch(() => {});
   } catch (err) {
     const status = err instanceof SlotBookingError ? err.statusCode : 400;
@@ -213,7 +215,7 @@ router.post("/", requireAuth, async (req, res) => {
 router.get("/", requireAuth, async (req, res) => {
   const orders = await Order.find({ userId: req.user.id })
     .sort({ createdAt: -1 })
-    .populate("pickupSlot", "date timeRange maxOrders bookedCount");
+    .populate("pickupSlot", "date timeRange maxOrders bookedCount type").populate("deliverySlot", "date timeRange maxOrders bookedCount type");
   res.json({ orders });
 });
 
@@ -286,7 +288,7 @@ router.get("/:id", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "Invalid order ID format" });
     }
 
-    const order = await Order.findById(orderId).populate("pickupSlot", "date timeRange maxOrders bookedCount");
+    const order = await Order.findById(orderId).populate("pickupSlot", "date timeRange maxOrders bookedCount type").populate("deliverySlot", "date timeRange maxOrders bookedCount type");
     if (!order) return res.status(404).json({ error: "Order not found" });
 
     if (String(order.userId) !== req.user.id && req.user.role !== "ADMIN") {
@@ -332,7 +334,7 @@ router.get("/admin/all", requireAuth, requirePermission("ORDERS"), async (req, r
     .populate("userId", "name phone email")
     .populate("riderId", "name phone")
     .populate("partnerId", "businessName phone")
-    .populate("pickupSlot", "date timeRange maxOrders bookedCount");
+    .populate("pickupSlot", "date timeRange maxOrders bookedCount type").populate("deliverySlot", "date timeRange maxOrders bookedCount type");
   res.json({ orders });
 });
 

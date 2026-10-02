@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 export default function AdminLogin() {
   const {
-    login,
+    login, verifyTwoFactor,
     logout
   } = useAuth();
   const navigate = useNavigate();
@@ -12,12 +12,16 @@ export default function AdminLogin() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [challengeToken, setChallengeToken] = useState("");
+  const [code, setCode] = useState("");
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      const user = await login(email, password);
+      const result = challengeToken ? await verifyTwoFactor(challengeToken, code) : await login(email, password);
+      if (result?.requiresTwoFactor) { setChallengeToken(result.challengeToken); setLoading(false); return; }
+      const user = result;
       if (user.role !== "ADMIN") {
         logout();
         setError("This login is for admin accounts only.");
@@ -32,20 +36,21 @@ export default function AdminLogin() {
   }
   return <AuthLayout title="Your workspace awaits." description="Sign in with your admin account to manage daily operations.">
       <form onSubmit={handleSubmit} className="space-y-4 bg-white border rounded-2xl p-6">
-        <div>
+        {!challengeToken && <div>
           <label htmlFor="admin-email" className="text-sm font-medium">Admin email</label>
           <input id="admin-email" type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full mt-1 border rounded-lg px-3 py-2" placeholder="admin@dhobighat.com" />
-        </div>
+        </div>}
         <div className="text-right"><Link to="/forgot-password" className="text-sm text-brand-600 underline">Forgot password?</Link></div>
-        <div>
+        {!challengeToken && <div>
           <label htmlFor="admin-password" className="text-sm font-medium">Password</label>
           <input id="admin-password" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full mt-1 border rounded-lg px-3 py-2" />
-        </div>
+        </div>}
+        {challengeToken && <div><label htmlFor="admin-code" className="text-sm font-medium">Authenticator code</label><input id="admin-code" inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} className="w-full mt-1 border rounded-lg px-3 py-2" placeholder="6-digit code" /><p className="text-xs text-gray-500 mt-2">Open your authenticator app and enter the current code.</p></div>}
 
         {error && <p className="text-red-600 text-sm">{error}</p>}
 
         <button type="submit" disabled={loading} className="w-full bg-gray-900 text-white rounded-lg py-3 font-semibold disabled:opacity-60">
-          {loading ? "Signing in…" : "Sign in to admin panel →"}
+          {loading ? "Signing in…" : challengeToken ? "Verify and sign in →" : "Sign in to admin panel →"}
         </button>
       </form>
 

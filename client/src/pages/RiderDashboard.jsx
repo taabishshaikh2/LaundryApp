@@ -17,8 +17,10 @@ export default function RiderDashboard() {
   const [updatingId, setUpdatingId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [noteDrafts, setNoteDrafts] = useState({});
+  const [manifest, setManifest] = useState([]);
+  const [mapsUrl, setMapsUrl] = useState("");
   async function load() { try { const res = await api.get("/rider/orders"); setOrders(res.data.orders); setError(""); } catch { setError("Could not load assigned orders. Please try again."); } finally { setLoading(false); } }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); api.get("/operations/manifest", { params: { date: new Date().toISOString().slice(0, 10) } }).then(res => { setManifest(res.data.stops || []); setMapsUrl(res.data.mapsUrl || ""); }).catch(() => {}); }, []);
   async function advance(orderId, status) { setUpdatingId(orderId); try { await api.put(`/rider/orders/${orderId}/status`, { status }); await load(); } catch (err) { setError(err.response?.data?.error || "Could not update this order."); } finally { setUpdatingId(null); } }
   async function submitNote(orderId) { try { const text = (noteDrafts[orderId] || "").trim(); if (!text) return; await api.post(`/rider/orders/${orderId}/notes`, { text }); setNoteDrafts((drafts) => ({ ...drafts, [orderId]: "" })); await load(); } catch { setError("Could not save your note."); } }
   const activeOrders = orders.filter((order) => !["DELIVERED", "CANCELLED"].includes(order.status));
@@ -40,6 +42,7 @@ export default function RiderDashboard() {
   return <RoleLayout title="Rider" subtitle="Assigned pickups and deliveries">
     {error && <div className="dg-error" role="alert">{error} <button onClick={load} className="underline">Retry</button></div>}
     {loading && <p role="status" className="dg-empty">Loading assignments…</p>}
+    {manifest.length > 0 && <section className="dg-card"><p className="dg-eyebrow">TODAY'S ROUTE</p><h2>Daily manifest</h2>{mapsUrl && <a className="dg-button mt-3" href={mapsUrl} target="_blank" rel="noreferrer">Open route in Maps</a>}{manifest.map(stop => <div className="dg-operation-row" key={stop.order._id}><strong>{stop.sequence}. #{stop.order._id.slice(-6).toUpperCase()}</strong><span>{stop.order.userId?.name} · {stop.order.address?.line1}</span><span>{stop.order.pickupSlot?.timeRange || stop.order.deliverySlot?.timeRange || "Unscheduled"}</span></div>)}</section>}
     <div className="dg-section-heading"><h2>Active ({activeOrders.length})</h2></div><div className="space-y-4">{activeOrders.map(renderOrder)}{!loading && activeOrders.length === 0 && <p className="dg-empty">No active assignments.</p>}</div>
     {!!pastOrders.length && <><div className="dg-section-heading"><h2>Completed</h2></div><div className="space-y-2">{pastOrders.map((order) => <div key={order._id} className="dg-card flex justify-between"><span>#{order._id.slice(-6).toUpperCase()} · {order.userId?.name}</span><span className="dg-status">{order.status.replaceAll("_", " ")}</span></div>)}</div></>}
   </RoleLayout>;

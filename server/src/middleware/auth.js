@@ -1,12 +1,17 @@
 import jwt from "jsonwebtoken";
 
-export function requireAuth(req, res, next) {
+export async function requireAuth(req, res, next) {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: "Not authenticated" });
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = payload; // { id, role }
+    const { default: User } = await import("../models/User.js");
+    const account = await User.findById(payload.id).select("role +sessionVersion").lean();
+    if (!account || Number(payload.sv || 0) !== Number(account.sessionVersion || 0)) {
+      return res.status(401).json({ error: "This session has been revoked. Sign in again.", code: "SESSION_REVOKED" });
+    }
+    req.user = { ...payload, role: account.role };
     next();
   } catch (err) {
     return res.status(401).json({ error: "Invalid or expired token" });

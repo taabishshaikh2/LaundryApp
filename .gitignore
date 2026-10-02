@@ -2,6 +2,7 @@
 node_modules/
 client/node_modules/
 server/node_modules/
+server/.npm-cache/
 
 # Environment variables and secrets
 .env

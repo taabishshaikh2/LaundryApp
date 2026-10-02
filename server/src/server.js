@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
+import helmet from "helmet";
 
 import authRoutes from "./routes/auth.js";
 import garmentRoutes from "./routes/garments.js";
@@ -17,12 +18,14 @@ import publicSettingsRouter from "./routes/publicSettings.js";
 import issueRoutes from "./routes/issues.js";
 import notificationRoutes from "./routes/notifications.js";
 import growthRoutes from "./routes/growth.js";
+import operationsRoutes from "./routes/operations.js";
 import crypto from "crypto";
 
 
 const app = express();
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use((req, res, next) => { req.requestId = crypto.randomUUID(); res.set("X-Request-Id", req.requestId); next(); });
 
 app.use(
@@ -49,6 +52,7 @@ app.use("/api/config", publicSettingsRouter);
 app.use("/api/issues", issueRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/growth", growthRoutes);
+app.use("/api/operations", operationsRoutes);
 // basic error handler
 app.use((err, req, res, next) => {
   console.error(JSON.stringify({ level: "error", requestId: req.requestId, method: req.method, path: req.originalUrl, message: err.message, stack: process.env.NODE_ENV === "production" ? undefined : err.stack }));

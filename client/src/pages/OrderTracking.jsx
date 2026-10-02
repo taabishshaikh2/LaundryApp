@@ -12,6 +12,7 @@ import { CustomerPricingApproval } from "../components/PricingRevision";
 import { ProcessingTimeline } from "../components/ProcessingWorkflow";
 import { CustomerDeliveryCode, DeliveryProofDetails } from "../components/DeliveryProof";
 import IssueCenter from "../components/IssueCenter";
+import OrderDocuments from "../components/OrderDocuments";
 const STATUS_FLOW = ["ORDER_PLACED", "PICKUP_ASSIGNED", "RIDER_ON_THE_WAY", "PICKED_UP", "PROCESSING", "READY", "OUT_FOR_DELIVERY", "DELIVERED"];
 export default function OrderTracking() {
   const {
@@ -76,6 +77,7 @@ export default function OrderTracking() {
             month: "short"
           })} · {order.pickupSlot.timeRange}</p>
           </Card>}
+        {order.deliverySlot && <Card className="mb-5"><p className="text-xs uppercase text-gray-500 font-semibold mb-1">Scheduled delivery</p><p className="font-medium">{new Date(order.deliverySlot.date).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })} · {order.deliverySlot.timeRange}</p></Card>}
 
         <div className="grid gap-5 md:grid-cols-2 md:gap-8">
           <Card variant="elevated">
@@ -143,6 +145,7 @@ export default function OrderTracking() {
         <CustomerCancellation order={order} onSaved={setOrder} />
         <div className="mt-5"><Link className="dg-button dg-secondary" to={`/new-order?repeat=${order._id}`}>Repeat this order</Link></div>
         <div className="mt-5"><IssueCenter order={order} /></div>
+        <OrderDocuments order={order} />
       </div>
     </Layout>;
 }

@@ -25,15 +25,13 @@ function trackLink(order) {
 }
 
 /**
- * Sends (or, for now, simulates) a WhatsApp notification for an order's
+ * Sends a WhatsApp template notification for an order's
  * current status and logs it to the Notification collection so it shows
  * up in the admin Notifications log regardless of whether real WhatsApp
  * credentials are configured.
  *
- * TO GO LIVE: once you have a WhatsApp Business API provider (Meta Cloud
- * API, Gupshup, Twilio, etc.), replace the body of the try block below
- * with the actual HTTP call to that provider, keeping the same
- * templateName/message/status bookkeeping so the admin log keeps working.
+ * Missing credentials or an unconfigured template are logged as SKIPPED,
+ * allowing local development and ordering to continue safely.
  */
 export async function sendWhatsAppNotification(order, status) {
   const buildMessage = TEMPLATES[status];
@@ -42,9 +40,11 @@ export async function sendWhatsAppNotification(order, status) {
   // order.userId may already be populated (has .name) or just an ObjectId —
   // handle both so callers don't need to remember to populate it.
   let customerName = order.userId?.name;
+  let customerPhone = order.userId?.phone;
   if (!customerName) {
-    const user = await User.findById(order.userId).select("name");
+    const user = await User.findById(order.userId).select("name phone");
     customerName = user?.name || "there";
+    customerPhone = user?.phone || "";
   }
 
   const message = buildMessage(order, customerName);
@@ -53,21 +53,27 @@ export async function sendWhatsAppNotification(order, status) {
     orderId: order._id,
     userId: order.userId,
     channel: "WHATSAPP",
-    templateName: status,
+    templateName: process.env[`WHATSAPP_TEMPLATE_${status}`] || status,
     message,
     status: "QUEUED",
   });
 
   try {
-    // ---- STUB: no real WhatsApp Business API configured yet ----
-    // eslint-disable-next-line no-console
-    console.log(`[WHATSAPP STUB] To user ${order.userId} — order ${shortId(order)} (${status}):\n  "${message}"`);
-
-    notification.status = "SENT";
-    notification.sentAt = new Date();
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+    const templateName = process.env[`WHATSAPP_TEMPLATE_${status}`];
+    const phone = String(customerPhone || "").replace(/\D/g, "");
+    if (!phoneNumberId || !accessToken || !templateName || !phone) notification.status = "SKIPPED";
+    else {
+      const graphVersion = process.env.WHATSAPP_GRAPH_VERSION || "v23.0";
+      const response = await fetch(`https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`, { method: "POST", headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" }, body: JSON.stringify({ messaging_product: "whatsapp", to: phone, type: "template", template: { name: templateName, language: { code: process.env.WHATSAPP_TEMPLATE_LANGUAGE || "en" }, components: [{ type: "body", parameters: [{ type: "text", text: customerName }, { type: "text", text: shortId(order) }, { type: "text", text: trackLink(order) }] }] } }) });
+      if (!response.ok) throw new Error(`WhatsApp provider rejected the message (${response.status})`);
+      notification.status = "SENT"; notification.sentAt = new Date();
+    }
     await notification.save();
   } catch (err) {
     notification.status = "FAILED";
+    notification.metadata = { error: String(err.message || err).slice(0, 300) };
     await notification.save();
   }
 

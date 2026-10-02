@@ -19,7 +19,7 @@ const RIDER_ALLOWED_STATUSES = ["RIDER_ON_THE_WAY", "OUT_FOR_DELIVERY"];
 router.get("/orders", async (req, res) => {
   const orders = await Order.find({ riderId: req.user.id })
     .sort({ createdAt: 1 })
-    .populate("userId", "name phone");
+    .populate("userId", "name phone").populate("pickupSlot deliverySlot");
   res.json({ orders });
 });
 

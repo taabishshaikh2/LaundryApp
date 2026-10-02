@@ -31,6 +31,7 @@ import AdminReports from "./pages/AdminReports";
 import Notifications from "./pages/Notifications";
 import AdminGrowth from "./pages/AdminGrowth";
 import AdminSecurity from "./pages/AdminSecurity";
+import AdminOperations from "./pages/AdminOperations";
 export default function App() {
   return <AuthProvider>
       <Routes>
@@ -60,6 +61,7 @@ export default function App() {
         <Route path="/admin/growth" element={<ProtectedRoute adminOnly><AdminGrowth /></ProtectedRoute>} />
         <Route path="/admin/alerts" element={<ProtectedRoute adminOnly><Notifications /></ProtectedRoute>} />
         <Route path="/admin/security" element={<ProtectedRoute adminOnly><AdminSecurity /></ProtectedRoute>} />
+        <Route path="/admin/operations" element={<ProtectedRoute adminOnly><AdminOperations /></ProtectedRoute>} />
         <Route path="/admin/customers" element={<ProtectedRoute adminOnly><AdminCustomers /></ProtectedRoute>} />
         <Route path="/admin/riders" element={<ProtectedRoute adminOnly><AdminRiders /></ProtectedRoute>} />
         <Route path="/admin/pricing" element={<ProtectedRoute adminOnly><AdminPricing /></ProtectedRoute>} />

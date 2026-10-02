@@ -1,14 +1,17 @@
 import React, { useState } from "react";
 import api from "../api";
+import { useAuth } from "../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 export default function PasswordChange() {
+  const { logout } = useAuth(); const navigate = useNavigate();
   const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [saving, setSaving] = useState(false); const [message, setMessage] = useState(""); const [error, setError] = useState("");
   async function submit(event) {
     event.preventDefault(); setError(""); setMessage("");
     if (form.newPassword !== form.confirmPassword) return setError("New passwords do not match");
     setSaving(true);
-    try { await api.put("/auth/change-password", { currentPassword: form.currentPassword, newPassword: form.newPassword }); setForm({ currentPassword: "", newPassword: "", confirmPassword: "" }); setMessage("Password changed successfully"); }
+    try { await api.put("/auth/change-password", { currentPassword: form.currentPassword, newPassword: form.newPassword }); setForm({ currentPassword: "", newPassword: "", confirmPassword: "" }); setMessage("Password changed. Sign in again on all devices."); logout(); navigate("/login", { replace: true, state: { passwordReset: true } }); }
     catch (err) { setError(err.response?.data?.error || "Could not change password"); }
     finally { setSaving(false); }
   }
