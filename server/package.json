@@ -3,13 +3,16 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "nodemon src/server.js",
+    "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "seed": "node src/seed.js",
     "backup": "node scripts/backup.js",
-    "migrate:photos": "node scripts/migratePhotosToCloudinary.js"
+    "migrate:photos": "node scripts/migratePhotosToCloudinary.js",
+    "db:check": "node scripts/checkDatabase.js",
+    "db:indexes": "node scripts/syncDatabaseIndexes.js"
   },
   "dependencies": {
+    "@sentry/node": "^11.4.0",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.11.0",
     "cors": "^2.8.5",
@@ -20,8 +23,5 @@
     "mongoose": "^8.5.0",
     "pdfkit": "^0.20.2",
     "qrcode": "^1.5.4"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.4"
   }
 }

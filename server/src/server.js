@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { Sentry, sentryEnabled } from "./instrument.js";
 import express from "express";
 import cors from "cors";
 import mongoose from "mongoose";
@@ -20,6 +21,7 @@ import notificationRoutes from "./routes/notifications.js";
 import growthRoutes from "./routes/growth.js";
 import operationsRoutes from "./routes/operations.js";
 import crypto from "crypto";
+import { databaseInfrastructureState, inspectDatabaseInfrastructure } from "./services/databaseReadiness.js";
 
 
 const app = express();
@@ -37,7 +39,37 @@ app.use(
 // Handover photos are compressed by the client and kept deliberately small.
 app.use(express.json({ limit: "3mb" }));
 
-app.get("/api/health", (req, res) => res.status(mongoose.connection.readyState === 1 ? 200 : 503).json({ ok: mongoose.connection.readyState === 1, database: mongoose.connection.readyState === 1 ? "connected" : "unavailable", uptimeSeconds: Math.round(process.uptime()), timestamp: new Date().toISOString() }));
+app.get("/api/health", (req, res) => res.json({ ok: true, uptimeSeconds: Math.round(process.uptime()), timestamp: new Date().toISOString() }));
+
+app.get("/api/ready", async (req, res) => {
+  const startedAt = Date.now();
+  let database = "unavailable";
+  let databaseError = "";
+  if (mongoose.connection.readyState === 1) {
+    let timer;
+    try {
+      await Promise.race([
+        mongoose.connection.db.command({ ping: 1 }),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Database ping timed out")), 2000); }),
+      ]);
+      database = "connected";
+    } catch (error) {
+      databaseError = error.message;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  const infrastructure = databaseInfrastructureState();
+  const ready = database === "connected" && infrastructure.ready;
+  res.status(ready ? 200 : 503).json({
+    ok: ready,
+    database,
+    databaseError: databaseError || undefined,
+    infrastructure,
+    responseTimeMs: Date.now() - startedAt,
+    timestamp: new Date().toISOString(),
+  });
+});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/garments", garmentRoutes);
@@ -54,7 +86,7 @@ app.use("/api/issues", issueRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/growth", growthRoutes);
 app.use("/api/operations", operationsRoutes);
-// basic error handler
+if (sentryEnabled) Sentry.setupExpressErrorHandler(app);
 app.use((err, req, res, next) => {
   console.error(JSON.stringify({ level: "error", requestId: req.requestId, method: req.method, path: req.originalUrl, message: err.message, stack: process.env.NODE_ENV === "production" ? undefined : err.stack }));
   res.status(500).json({ error: "Server error", requestId: req.requestId });
@@ -62,13 +94,26 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(() => {
+app.listen(PORT, "0.0.0.0", () => console.log(`API listening on http://0.0.0.0:${PORT}`));
+
+async function connectDatabase() {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {
+      autoIndex: process.env.NODE_ENV !== "production",
+      serverSelectionTimeoutMS: 10000,
+    });
     console.log("MongoDB connected");
-    app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`));
-  })
-  .catch((err) => {
-    console.error("MongoDB connection failed:", err.message);
-    process.exit(1);
-  });
+    inspectDatabaseInfrastructure()
+      .then((infrastructure) => console.log(JSON.stringify({ level: infrastructure.ready ? "info" : "warn", event: "database_infrastructure_check", ...infrastructure })))
+      .catch((error) => {
+        if (sentryEnabled) Sentry.captureException(error);
+        console.error(JSON.stringify({ level: "error", event: "database_infrastructure_check_failed", message: error.message }));
+      });
+  } catch (err) {
+    if (sentryEnabled) Sentry.captureException(err);
+    console.error("MongoDB connection failed; retrying in 10 seconds:", err.message);
+    setTimeout(connectDatabase, 10000);
+  }
+}
+
+connectDatabase();
