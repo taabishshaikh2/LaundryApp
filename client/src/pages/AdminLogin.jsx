@@ -45,7 +45,7 @@ export default function AdminLogin() {
           <label htmlFor="admin-password" className="text-sm font-medium">Password</label>
           <input id="admin-password" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full mt-1 border rounded-lg px-3 py-2" />
         </div>}
-        {challengeToken && <div><label htmlFor="admin-code" className="text-sm font-medium">Authenticator code</label><input id="admin-code" inputMode="numeric" autoComplete="one-time-code" required value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} className="w-full mt-1 border rounded-lg px-3 py-2" placeholder="6-digit code" /><p className="text-xs text-gray-500 mt-2">Open your authenticator app and enter the current code.</p></div>}
+        {challengeToken && <div><label htmlFor="admin-code" className="text-sm font-medium">Authenticator or recovery code</label><input id="admin-code" autoCapitalize="characters" autoComplete="one-time-code" required value={code} onChange={e => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "").slice(0, 11))} className="w-full mt-1 border rounded-lg px-3 py-2" placeholder="6-digit or recovery code" /><p className="text-xs text-gray-500 mt-2">Use your authenticator app, or one unused recovery code if your device is unavailable.</p></div>}
 
         {error && <p className="text-red-600 text-sm">{error}</p>}
 

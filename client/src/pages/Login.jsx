@@ -38,6 +38,7 @@ export default function Login() {
             <div className="text-right"><Link to="/forgot-password" className="text-sm text-brand-600 underline">Forgot password?</Link></div>
 
             {location.state?.passwordReset && <div className="dg-success">Password reset successfully. Sign in with your new password.</div>}
+            {location.state?.signedOutEverywhere && <div className="dg-success">You have been signed out from every device.</div>}
 
             <Button type="submit" variant="primary" size="lg" loading={loading} className="w-full">
               {loading ? "Signing in..." : "Sign in →"}

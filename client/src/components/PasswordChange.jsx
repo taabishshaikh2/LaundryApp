@@ -11,7 +11,7 @@ export default function PasswordChange() {
     event.preventDefault(); setError(""); setMessage("");
     if (form.newPassword !== form.confirmPassword) return setError("New passwords do not match");
     setSaving(true);
-    try { await api.put("/auth/change-password", { currentPassword: form.currentPassword, newPassword: form.newPassword }); setForm({ currentPassword: "", newPassword: "", confirmPassword: "" }); setMessage("Password changed. Sign in again on all devices."); logout(); navigate("/login", { replace: true, state: { passwordReset: true } }); }
+    try { await api.put("/auth/change-password", { currentPassword: form.currentPassword, newPassword: form.newPassword }); setForm({ currentPassword: "", newPassword: "", confirmPassword: "" }); setMessage("Password changed. Sign in again on all devices."); await logout(); navigate("/login", { replace: true, state: { passwordReset: true } }); }
     catch (err) { setError(err.response?.data?.error || "Could not change password"); }
     finally { setSaving(false); }
   }

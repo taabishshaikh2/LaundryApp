@@ -31,6 +31,7 @@ app.use((req, res, next) => { req.requestId = crypto.randomUUID(); res.set("X-Re
 app.use(
   cors({
     origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+    credentials: true,
   })
 );
 // Handover photos are compressed by the client and kept deliberately small.

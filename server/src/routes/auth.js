@@ -10,6 +10,7 @@ import { writeAudit } from "../utils/audit.js";
 import { deliverVerificationCode } from "../services/verificationDelivery.js";
 import { createSession, rotateSession, revokeAllSessions, revokeSession } from "../utils/authSessions.js";
 import { generateTotpSecret, protectTotpSecret, revealTotpSecret, verifyTotp } from "../utils/totp.js";
+import { clearRefreshCookie, getRefreshCookie, setRefreshCookie } from "../utils/authCookies.js";
 
 const router = express.Router();
 
@@ -29,6 +30,7 @@ function publicUser(user) {
     referralCredit: user.referralCredit,
     adminPermissions: user.role === "ADMIN" ? user.adminPermissions : undefined,
     twoFactorEnabled: user.role === "ADMIN" ? Boolean(user.twoFactor?.enabled) : undefined,
+    recoveryCodesRemaining: user.role === "ADMIN" && user.twoFactor?.enabled && Array.isArray(user.twoFactor?.recoveryCodeHashes) ? user.twoFactor.recoveryCodeHashes.length : undefined,
     createdAt: user.createdAt,
   };
 }
@@ -40,6 +42,26 @@ function validatePassword(password) {
 const authLimiter = rateLimit({ namespace: "auth", max: 8, windowMs: 15 * 60 * 1000, key: (req) => `${req.ip}:${String(req.body?.email || "").toLowerCase()}` });
 const resetLimiter = rateLimit({ namespace: "reset", max: 5, windowMs: 30 * 60 * 1000, key: (req) => `${req.ip}:${String(req.body?.email || "").toLowerCase()}` });
 const verificationHash = (value) => crypto.createHmac("sha256", process.env.JWT_SECRET).update(String(value)).digest("hex");
+const recoveryCodeHash = (value) => crypto.createHmac("sha256", process.env.JWT_SECRET).update(String(value).replace(/[^A-Z0-9]/gi, "").toUpperCase()).digest("hex");
+const generateRecoveryCodes = () => Array.from({ length: 10 }, () => {
+  const raw = crypto.randomBytes(5).toString("hex").toUpperCase();
+  return `${raw.slice(0, 5)}-${raw.slice(5)}`;
+});
+
+function sessionResponse(res, session, user, status = 200) {
+  setRefreshCookie(res, session.refreshToken);
+  return res.status(status).json({ token: session.token, expiresInMinutes: session.expiresInMinutes, user: publicUser(user) });
+}
+
+function verifyAdminSecondFactor(user, code) {
+  const value = String(code || "").trim();
+  if (verifyTotp(revealTotpSecret(user.twoFactor.secret), value)) return { valid: true, usedRecoveryCode: false };
+  const hash = recoveryCodeHash(value);
+  const index = (user.twoFactor.recoveryCodeHashes || []).findIndex((stored) => stored === hash);
+  if (index < 0) return { valid: false, usedRecoveryCode: false };
+  user.twoFactor.recoveryCodeHashes.splice(index, 1);
+  return { valid: true, usedRecoveryCode: true };
+}
 
 router.post("/register", authLimiter, async (req, res) => {
   try {
@@ -57,7 +79,7 @@ router.post("/register", authLimiter, async (req, res) => {
     user.referralCode = `DG${String(user._id).slice(-6).toUpperCase()}`;
     await user.save();
     const session = await createSession(user, req);
-    res.status(201).json({ ...session, user: publicUser(user) });
+    sessionResponse(res, session, user, 201);
   } catch (err) {
     res.status(500).json({ error: "Registration failed", detail: err.message });
   }
@@ -77,7 +99,7 @@ router.post("/login", authLimiter, async (req, res) => {
       return res.json({ requiresTwoFactor: true, challengeToken });
     }
     const session = await createSession(user, req);
-    res.json({ ...session, user: publicUser(user) });
+    sessionResponse(res, session, user);
   } catch (err) {
     res.status(500).json({ error: "Login failed", detail: err.message });
   }
@@ -125,7 +147,7 @@ router.post("/forgot-password/reset", async (req, res) => {
 });
 
 router.get("/me", requireAuth, async (req, res) => {
-  const user = await User.findById(req.user.id);
+  const user = await User.findById(req.user.id).select("+twoFactor.recoveryCodeHashes");
   if (!user) return res.status(404).json({ error: "User not found" });
   res.json({ user: publicUser(user) });
 });
@@ -171,53 +193,87 @@ router.put("/change-password", requireAuth, async (req, res) => {
 
 router.post("/refresh", rateLimit({ namespace: "refresh", max: 30, windowMs: 15 * 60 * 1000 }), async (req, res) => {
   try {
-    const session = await rotateSession(String(req.body.refreshToken || ""), req);
-    res.json({ token: session.token, refreshToken: session.refreshToken, expiresInMinutes: session.expiresInMinutes, user: publicUser(session.user) });
+    const session = await rotateSession(getRefreshCookie(req), req);
+    sessionResponse(res, session, session.user);
   } catch (error) {
+    clearRefreshCookie(res);
     res.status(401).json({ error: error.message });
   }
 });
 
 router.post("/logout", async (req, res) => {
-  await revokeSession(String(req.body.refreshToken || ""));
+  await revokeSession(getRefreshCookie(req));
+  clearRefreshCookie(res);
   res.json({ ok: true });
+});
+
+router.post("/logout-all", requireAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("+sessionVersion");
+    if (!user) return res.status(404).json({ error: "Account not found" });
+    user.sessionVersion = Number(user.sessionVersion || 0) + 1;
+    await user.save();
+    await revokeAllSessions(user._id);
+    clearRefreshCookie(res);
+    await writeAudit(req, "SIGNED_OUT_ALL_DEVICES", "User", user._id);
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ error: "Could not sign out all devices", detail: error.message });
+  }
 });
 
 router.post("/2fa/verify-login", rateLimit({ namespace: "2fa-login", max: 8, windowMs: 15 * 60 * 1000 }), async (req, res) => {
   try {
     const payload = jwt.verify(String(req.body.challengeToken || ""), process.env.JWT_SECRET);
     if (payload.purpose !== "ADMIN_2FA") throw new Error("Invalid verification session");
-    const user = await User.findOne({ _id: payload.id, role: "ADMIN" }).select("+sessionVersion +twoFactor.secret");
-    if (!user?.twoFactor?.enabled || !verifyTotp(revealTotpSecret(user.twoFactor.secret), req.body.code)) return res.status(400).json({ error: "Invalid authenticator code" });
+    const user = await User.findOne({ _id: payload.id, role: "ADMIN" }).select("+sessionVersion +twoFactor.secret +twoFactor.recoveryCodeHashes");
+    if (!user?.twoFactor?.enabled) return res.status(400).json({ error: "Two-factor authentication is not enabled" });
+    const verification = verifyAdminSecondFactor(user, req.body.code);
+    if (!verification.valid) return res.status(400).json({ error: "Invalid authenticator or recovery code" });
+    if (verification.usedRecoveryCode) await user.save();
     const session = await createSession(user, req);
-    res.json({ ...session, user: publicUser(user) });
+    sessionResponse(res, session, user);
   } catch (error) { res.status(400).json({ error: error.message || "Could not verify code" }); }
 });
 
 router.post("/2fa/setup", requireAuth, async (req, res) => {
-  const user = await User.findOne({ _id: req.user.id, role: "ADMIN" }).select("+twoFactor.secret");
+  const user = await User.findOne({ _id: req.user.id, role: "ADMIN" }).select("+twoFactor.secret +twoFactor.recoveryCodeHashes");
   if (!user) return res.status(403).json({ error: "Administrator access required" });
   const secret = generateTotpSecret();
-  user.twoFactor.secret = protectTotpSecret(secret); user.twoFactor.enabled = false; user.twoFactor.enabledAt = null;
+  user.twoFactor.secret = protectTotpSecret(secret); user.twoFactor.enabled = false; user.twoFactor.enabledAt = null; user.twoFactor.recoveryCodeHashes = []; user.twoFactor.recoveryCodesGeneratedAt = null;
   await user.save();
   const issuer = encodeURIComponent("Dhobi Ghat Admin");
   res.json({ secret, otpauthUrl: `otpauth://totp/${issuer}:${encodeURIComponent(user.email)}?secret=${secret}&issuer=${issuer}` });
 });
 
 router.post("/2fa/enable", requireAuth, async (req, res) => {
-  const user = await User.findOne({ _id: req.user.id, role: "ADMIN" }).select("+twoFactor.secret");
+  const user = await User.findOne({ _id: req.user.id, role: "ADMIN" }).select("+twoFactor.secret +twoFactor.recoveryCodeHashes");
   if (!user?.twoFactor?.secret || !verifyTotp(revealTotpSecret(user.twoFactor.secret), req.body.code)) return res.status(400).json({ error: "Invalid authenticator code" });
-  user.twoFactor.enabled = true; user.twoFactor.enabledAt = new Date(); await user.save();
+  const recoveryCodes = generateRecoveryCodes();
+  user.twoFactor.enabled = true; user.twoFactor.enabledAt = new Date(); user.twoFactor.recoveryCodeHashes = recoveryCodes.map(recoveryCodeHash); user.twoFactor.recoveryCodesGeneratedAt = new Date(); await user.save();
   await writeAudit(req, "ADMIN_2FA_ENABLED", "User", user._id);
-  res.json({ user: publicUser(user) });
+  res.json({ user: publicUser(user), recoveryCodes });
 });
 
 router.post("/2fa/disable", requireAuth, async (req, res) => {
-  const user = await User.findOne({ _id: req.user.id, role: "ADMIN" }).select("+twoFactor.secret");
-  if (!user?.twoFactor?.enabled || !verifyTotp(revealTotpSecret(user.twoFactor.secret), req.body.code)) return res.status(400).json({ error: "Invalid authenticator code" });
-  user.twoFactor.enabled = false; user.twoFactor.secret = ""; user.twoFactor.enabledAt = null; await user.save();
+  const user = await User.findOne({ _id: req.user.id, role: "ADMIN" }).select("+twoFactor.secret +twoFactor.recoveryCodeHashes");
+  if (!user?.twoFactor?.enabled) return res.status(400).json({ error: "Two-factor authentication is not enabled" });
+  const verification = verifyAdminSecondFactor(user, req.body.code);
+  if (!verification.valid) return res.status(400).json({ error: "Invalid authenticator or recovery code" });
+  user.twoFactor.enabled = false; user.twoFactor.secret = ""; user.twoFactor.enabledAt = null; user.twoFactor.recoveryCodeHashes = []; user.twoFactor.recoveryCodesGeneratedAt = null; await user.save();
   await writeAudit(req, "ADMIN_2FA_DISABLED", "User", user._id);
   res.json({ user: publicUser(user) });
+});
+
+router.post("/2fa/recovery-codes", requireAuth, async (req, res) => {
+  const user = await User.findOne({ _id: req.user.id, role: "ADMIN" }).select("+twoFactor.secret +twoFactor.recoveryCodeHashes");
+  if (!user?.twoFactor?.enabled || !verifyTotp(revealTotpSecret(user.twoFactor.secret), req.body.code)) return res.status(400).json({ error: "Enter a valid authenticator code" });
+  const recoveryCodes = generateRecoveryCodes();
+  user.twoFactor.recoveryCodeHashes = recoveryCodes.map(recoveryCodeHash);
+  user.twoFactor.recoveryCodesGeneratedAt = new Date();
+  await user.save();
+  await writeAudit(req, "ADMIN_2FA_RECOVERY_CODES_REGENERATED", "User", user._id);
+  res.json({ recoveryCodes });
 });
 
 router.put("/onboarding", requireAuth, async (req, res) => {

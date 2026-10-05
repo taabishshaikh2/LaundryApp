@@ -49,6 +49,8 @@ const userSchema = new mongoose.Schema(
       enabled: { type: Boolean, default: false },
       secret: { type: String, default: "", select: false },
       enabledAt: { type: Date, default: null },
+      recoveryCodeHashes: { type: [String], default: [], select: false },
+      recoveryCodesGeneratedAt: { type: Date, default: null },
     },
     verification: {
       emailCodeHash: { type: String, default: "", select: false },

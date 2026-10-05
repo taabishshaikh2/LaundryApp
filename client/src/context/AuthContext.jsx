@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import api from "../api";
+import api, { refreshAccessToken } from "../api";
 
 const AuthContext = createContext(null);
 
@@ -10,8 +10,17 @@ export function AuthProvider({ children }) {
   async function refreshUser() {
     const token = localStorage.getItem("dg_token");
     if (!token) {
-      setUser(null);
-      setLoading(false);
+      try {
+        const res = await refreshAccessToken();
+        localStorage.setItem("dg_token", res.data.token);
+        localStorage.removeItem("dg_refresh_token");
+        setUser(res.data.user);
+      } catch {
+        localStorage.removeItem("dg_refresh_token");
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
       return;
     }
     try {
@@ -32,7 +41,7 @@ export function AuthProvider({ children }) {
 
   function storeSession(data) {
     localStorage.setItem("dg_token", data.token);
-    localStorage.setItem("dg_refresh_token", data.refreshToken);
+    localStorage.removeItem("dg_refresh_token");
     setUser(data.user);
     return data.user;
   }
@@ -53,16 +62,20 @@ export function AuthProvider({ children }) {
     return storeSession(res.data);
   }
 
-  function logout() {
-    const refreshToken = localStorage.getItem("dg_refresh_token");
-    if (refreshToken) api.post("/auth/logout", { refreshToken }).catch(() => {});
+  async function logout() {
+    try { await api.post("/auth/logout", {}); } catch { /* clear the local session even if the network is unavailable */ }
+    finally { localStorage.removeItem("dg_token"); localStorage.removeItem("dg_refresh_token"); setUser(null); }
+  }
+
+  async function logoutAll() {
+    await api.post("/auth/logout-all", {});
     localStorage.removeItem("dg_token");
     localStorage.removeItem("dg_refresh_token");
     setUser(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, verifyTwoFactor, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, verifyTwoFactor, register, logout, logoutAll, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
