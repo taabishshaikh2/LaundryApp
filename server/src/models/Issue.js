@@ -4,7 +4,17 @@ export const ISSUE_CATEGORIES = ["MISSING_GARMENT", "DAMAGED_GARMENT", "STAIN_RE
 export const ISSUE_STATUSES = ["OPEN", "INVESTIGATING", "AWAITING_CUSTOMER", "RESOLVED", "CLOSED"];
 export const ISSUE_PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 
-const photoSchema = new mongoose.Schema({ dataUrl: { type: String, required: true }, caption: { type: String, maxlength: 120, default: "" } }, { _id: false });
+const photoSchema = new mongoose.Schema({
+  dataUrl: { type: String, default: "" },
+  url: { type: String, default: "" },
+  publicId: { type: String, default: "" },
+  resourceType: { type: String, default: "image" },
+  format: { type: String, default: "" },
+  bytes: { type: Number, min: 0, default: 0 },
+  width: { type: Number, min: 0, default: 0 },
+  height: { type: Number, min: 0, default: 0 },
+  caption: { type: String, maxlength: 120, default: "" },
+}, { _id: false });
 const messageSchema = new mongoose.Schema({
   text: { type: String, required: true, trim: true, maxlength: 2000 },
   visibility: { type: String, enum: ["CUSTOMER", "INTERNAL"], default: "CUSTOMER" },

@@ -14,6 +14,20 @@ function isGenericUnexpectedName(name) {
 
 function validatePhoto(photo) {
   const dataUrl = String(photo?.dataUrl || "");
+  const url = String(photo?.url || "");
+  const publicId = String(photo?.publicId || "");
+  if (!dataUrl && /^https:\/\/res\.cloudinary\.com\//i.test(url) && publicId) {
+    return {
+      url,
+      publicId: publicId.slice(0, 500),
+      resourceType: "image",
+      format: String(photo?.format || "").slice(0, 20),
+      bytes: Math.max(0, Number(photo?.bytes || 0)),
+      width: Math.max(0, Number(photo?.width || 0)),
+      height: Math.max(0, Number(photo?.height || 0)),
+      caption: cleanText(photo?.caption, 120),
+    };
+  }
   if (!DATA_URL_PATTERN.test(dataUrl)) throw new Error("Photos must be JPEG, PNG, or WebP images");
   const base64 = dataUrl.split(",")[1] || "";
   const size = Math.ceil((base64.length * 3) / 4);

@@ -6,6 +6,7 @@ import User from "../models/User.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { advanceOrderStatus } from "../utils/orderStatus.js";
 import { actorDetails, handoverSummary, normalizeHandoverItems } from "../utils/handover.js";
+import { uploadHandoverItems, uploadPhoto } from "../services/cloudinaryPhotos.js";
 
 const router = express.Router();
 
@@ -124,6 +125,10 @@ router.post("/orders/:id/delivery-proof", async (req, res) => {
     if ((lat === null || lng === null) && locationAddress.length < 3) {
       return res.status(400).json({ error: "Capture the delivery location or enter a location note" });
     }
+    const deliveryPhoto = photoDataUrl ? await uploadPhoto(
+      { dataUrl: photoDataUrl, caption: "Proof of delivery" },
+      { orderId, category: "delivery" }
+    ) : null;
     const rider = await User.findById(req.user.id).select("name");
     const now = new Date();
     Object.assign(order.deliveryProof, {
@@ -135,7 +140,7 @@ router.post("/orders/:id/delivery-proof", async (req, res) => {
       expectedGarmentCount,
       deliveredGarmentCount,
       missingOrDamagedNotes: missingOrDamagedNotes.slice(0, 1000),
-      photo: photoDataUrl ? { dataUrl: photoDataUrl, caption: "Proof of delivery" } : null,
+      photo: deliveryPhoto,
       cashCollected,
       collectedAmount,
       collectionMethod: String(req.body.collectionMethod || (cashCollected ? "CASH" : "")).trim().slice(0, 40),
@@ -155,7 +160,7 @@ router.post("/orders/:id/delivery-proof", async (req, res) => {
     await advanceOrderStatus(order, "DELIVERED", { userId: req.user.id, role: "RIDER", note: "OTP verified; proof of delivery recorded" });
     res.json({ order });
   } catch (err) {
-    res.status(400).json({ error: err.message || "Could not complete delivery" });
+    res.status(err.statusCode || 400).json({ error: err.message || "Could not complete delivery" });
   }
 });
 
@@ -171,7 +176,8 @@ router.put("/orders/:id/handover", async (req, res) => {
       return res.status(409).json({ error: "Handover can only be recorded during pickup" });
     }
 
-    const items = normalizeHandoverItems(req.body.items, order.items);
+    const normalizedItems = normalizeHandoverItems(req.body.items, order.items);
+    const items = await uploadHandoverItems(normalizedItems, orderId);
     const actor = await actorDetails(req.user.id, "RIDER");
     const firstConfirmation = !order.handover?.confirmedAt;
     const now = new Date();
@@ -199,7 +205,7 @@ router.put("/orders/:id/handover", async (req, res) => {
     }
     res.json({ order });
   } catch (err) {
-    res.status(400).json({ error: err.message || "Could not save handover" });
+    res.status(err.statusCode || 400).json({ error: err.message || "Could not save handover" });
   }
 });
 

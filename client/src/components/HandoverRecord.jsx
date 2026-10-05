@@ -56,7 +56,7 @@ export function HandoverDetails({ handover }) {
         {item.stainNotes && <p><b>Stain:</b> {item.stainNotes}</p>}
         {item.damageNotes && <p><b>Damage:</b> {item.damageNotes}</p>}
         {item.specialCareNotes && <p><b>Special care:</b> {item.specialCareNotes}</p>}
-        {!!item.photos?.length && <div className="dg-photo-row">{item.photos.map((photo, photoIndex) => <a href={photo.dataUrl} target="_blank" rel="noreferrer" key={photoIndex}><img src={photo.dataUrl} alt={`${item.name} pickup ${photoIndex + 1}`} /></a>)}</div>}
+        {!!item.photos?.length && <div className="dg-photo-row">{item.photos.map((photo, photoIndex) => <a href={photo.url || photo.dataUrl} target="_blank" rel="noreferrer" key={photoIndex}><img src={photo.url || photo.dataUrl} alt={`${item.name} pickup ${photoIndex + 1}`} /></a>)}</div>}
       </div>)}
     </div>
     {handover.generalNotes && <p className="text-sm mt-3"><b>General note:</b> {handover.generalNotes}</p>}
@@ -102,7 +102,7 @@ export function HandoverEditor({ order, endpoint, onSaved, title = "Confirm garm
       </div>
       <label>Special-care notes<textarea rows="2" value={item.specialCareNotes || ""} onChange={(event) => update(index, "specialCareNotes", event.target.value)} placeholder="Customer instructions or fabric care" /></label>
       <label className="dg-photo-input">Optional photos (max 3)<input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => { addPhotos(index, event.target.files); event.target.value = ""; }} /></label>
-      {!!item.photos?.length && <div className="dg-photo-row">{item.photos.map((photo, photoIndex) => <div key={photoIndex}><img src={photo.dataUrl} alt="Garment preview" /><button type="button" onClick={() => update(index, "photos", item.photos.filter((_, i) => i !== photoIndex))}>Remove</button></div>)}</div>}
+      {!!item.photos?.length && <div className="dg-photo-row">{item.photos.map((photo, photoIndex) => <div key={photoIndex}><img src={photo.url || photo.dataUrl} alt="Garment preview" /><button type="button" onClick={() => update(index, "photos", item.photos.filter((_, i) => i !== photoIndex))}>Remove</button></div>)}</div>}
       {item.orderedQuantity === 0 && <button type="button" className="dg-remove-line" onClick={() => removeItem(index)}>Remove unexpected garment</button>}
     </div>)}
     <button type="button" className="dg-button dg-secondary" onClick={addUnexpectedGarment}>Add unexpected garment</button>

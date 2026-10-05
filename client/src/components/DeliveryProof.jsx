@@ -46,7 +46,7 @@ export function DeliveryProofDetails({ proof }) {
     <div className="dg-proof-grid"><p><b>Recipient</b><span>{proof.recipientName}</span></p><p><b>Delivered at</b><span>{new Date(proof.verifiedAt).toLocaleString("en-IN")}</span></p><p><b>Rider</b><span>{proof.verifiedByName}</span></p><p><b>Collection</b><span>{proof.cashCollected ? `₹${proof.collectedAmount} · ${proof.collectionMethod || "Cash"}` : "No cash collected"}</span></p></div>
     {proof.missingOrDamagedNotes && <p className="dg-proof-note"><b>Missing/damaged garments:</b> {proof.missingOrDamagedNotes}</p>}
     {(proof.location?.address || proof.location?.lat != null) && <p className="text-sm"><b>Location:</b> {proof.location.address || `${proof.location.lat}, ${proof.location.lng}`}</p>}
-    {proof.photo?.dataUrl && <a href={proof.photo.dataUrl} target="_blank" rel="noreferrer" className="dg-proof-photo"><img src={proof.photo.dataUrl} alt="Delivery proof" />View full photo</a>}
+    {(proof.photo?.url || proof.photo?.dataUrl) && <a href={proof.photo.url || proof.photo.dataUrl} target="_blank" rel="noreferrer" className="dg-proof-photo"><img src={proof.photo.url || proof.photo.dataUrl} alt="Delivery proof" />View full photo</a>}
     {!!proof.auditTrail?.length && <details><summary>Delivery audit trail</summary><ul className="dg-audit-list">{proof.auditTrail.map((entry, index) => <li key={index}><strong>{entry.action}</strong> · {entry.changedByName} ({entry.changedByRole}) · {new Date(entry.timestamp).toLocaleString("en-IN")}<br />{entry.note}</li>)}</ul></details>}
   </div>;
 }

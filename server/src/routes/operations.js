@@ -11,8 +11,10 @@ import Rating from "../models/Rating.js";
 import Notification from "../models/Notification.js";
 import AuthSession from "../models/AuthSession.js";
 import DataDeletionRequest from "../models/DataDeletionRequest.js";
+import Issue from "../models/Issue.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { writeAudit } from "../utils/audit.js";
+import { deleteCloudinaryPhotos, orderPhotoPublicIds } from "../services/cloudinaryPhotos.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -137,9 +139,41 @@ router.post("/privacy/delete-request", async (req, res) => {
 });
 
 router.put("/admin/deletion-requests/:id", requirePermission("CUSTOMERS"), async (req, res) => {
-  const request = await DataDeletionRequest.findById(req.params.id); if (!request) return res.status(404).json({ error: "Request not found" }); const status = String(req.body.status || ""); if (!["APPROVED", "REJECTED", "COMPLETED"].includes(status)) return res.status(400).json({ error: "Invalid request status" });
-  if (status === "COMPLETED") { const active = await Order.countDocuments({ userId: request.userId, status: { $nin: ["DELIVERED", "CANCELLED"] } }); if (active) return res.status(409).json({ error: "This customer still has active orders" }); const suffix = String(request.userId).slice(-8); await User.updateOne({ _id: request.userId }, { $set: { name: "Deleted customer", email: `deleted-${suffix}@privacy.invalid`, phone: "DELETED", addresses: [], savedGarments: [], referralCredit: 0, emailVerifiedAt: null, phoneVerifiedAt: null }, $unset: { referralCode: 1 }, $inc: { sessionVersion: 1 } }); await Promise.all([AuthSession.deleteMany({ userId: request.userId }), Notification.deleteMany({ userId: request.userId })]); }
-  request.status = status; request.reviewedBy = req.user.id; request.reviewedAt = new Date(); request.reviewNote = String(req.body.reviewNote || "").slice(0, 500); await request.save(); await writeAudit(req, `DATA_DELETION_${status}`, "DataDeletionRequest", request._id); res.json({ request });
+  try {
+    const request = await DataDeletionRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ error: "Request not found" });
+    const status = String(req.body.status || "");
+    if (!["APPROVED", "REJECTED", "COMPLETED"].includes(status)) return res.status(400).json({ error: "Invalid request status" });
+    if (status === "COMPLETED") {
+      const active = await Order.countDocuments({ userId: request.userId, status: { $nin: ["DELIVERED", "CANCELLED"] } });
+      if (active) return res.status(409).json({ error: "This customer still has active orders" });
+      const [orders, issues] = await Promise.all([
+        Order.find({ userId: request.userId }).select("handover processing deliveryProof").lean(),
+        Issue.find({ userId: request.userId }).select("photos").lean(),
+      ]);
+      const photoIds = [
+        ...orders.flatMap(orderPhotoPublicIds),
+        ...issues.flatMap((issue) => (issue.photos || []).map((photo) => photo.publicId).filter(Boolean)),
+      ];
+      await deleteCloudinaryPhotos(photoIds);
+      const suffix = String(request.userId).slice(-8);
+      await User.updateOne({ _id: request.userId }, { $set: { name: "Deleted customer", email: `deleted-${suffix}@privacy.invalid`, phone: "DELETED", addresses: [], savedGarments: [], referralCredit: 0, emailVerifiedAt: null, phoneVerifiedAt: null }, $unset: { referralCode: 1 }, $inc: { sessionVersion: 1 } });
+      await Promise.all([
+        AuthSession.deleteMany({ userId: request.userId }),
+        Notification.deleteMany({ userId: request.userId }),
+        Issue.deleteMany({ userId: request.userId }),
+      ]);
+    }
+    request.status = status;
+    request.reviewedBy = req.user.id;
+    request.reviewedAt = new Date();
+    request.reviewNote = String(req.body.reviewNote || "").slice(0, 500);
+    await request.save();
+    await writeAudit(req, `DATA_DELETION_${status}`, "DataDeletionRequest", request._id);
+    res.json({ request });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "Could not update deletion request" });
+  }
 });
 
 export default router;

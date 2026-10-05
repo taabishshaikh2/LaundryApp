@@ -6,6 +6,7 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import { advanceOrderStatus } from "../utils/orderStatus.js";
 import { actorDetails } from "../utils/handover.js";
 import { handoverReceivedCount, initializeProcessing, nextProcessingStage, normalizeProcessingPhotos, processingIsReady } from "../utils/processingWorkflow.js";
+import { uploadPhotos } from "../services/cloudinaryPhotos.js";
 
 const router = express.Router();
 router.use(requireAuth, requireRole("LAUNDRY_PARTNER"));
@@ -85,7 +86,8 @@ router.post("/orders/:id/processing-stage", async (req, res) => {
     const issueType = String(req.body.issueType || "").toUpperCase();
     const issueNote = String(req.body.issueNote || "").trim().slice(0, 500);
     if (issueType && issueNote.length < 3) return res.status(400).json({ error: "Describe the processing issue" });
-    const photos = normalizeProcessingPhotos(req.body.photos);
+    const normalizedPhotos = normalizeProcessingPhotos(req.body.photos);
+    const photos = await uploadPhotos(normalizedPhotos, { orderId: order._id, category: `processing-${stageName.toLowerCase()}` });
     if (action === "START") {
       current.status = "IN_PROGRESS";
       current.startedAt ||= new Date();
@@ -104,7 +106,7 @@ router.post("/orders/:id/processing-stage", async (req, res) => {
     order.processing.auditTrail.push({ ...actor, action: action === "START" ? "STAGE_STARTED" : "STAGE_COMPLETED", stage: stageName, note: issueNote || note, timestamp: new Date() });
     await order.save();
     res.json({ order });
-  } catch (err) { res.status(400).json({ error: err.message || "Could not update processing stage" }); }
+  } catch (err) { res.status(err.statusCode || 400).json({ error: err.message || "Could not update processing stage" }); }
 });
 
 router.post("/orders/:id/quality-check", async (req, res) => {
@@ -120,7 +122,8 @@ router.post("/orders/:id/quality-check", async (req, res) => {
     if (!["PASS", "FAIL"].includes(result)) return res.status(400).json({ error: "Choose PASS or FAIL" });
     const notes = String(req.body.notes || "").trim().slice(0, 1000);
     if (result === "FAIL" && notes.length < 3) return res.status(400).json({ error: "Explain why quality check failed" });
-    const photos = normalizeProcessingPhotos(req.body.photos);
+    const normalizedPhotos = normalizeProcessingPhotos(req.body.photos);
+    const photos = await uploadPhotos(normalizedPhotos, { orderId: order._id, category: "quality-check" });
     const actor = await actorDetails(req.user.id, "LAUNDRY_PARTNER");
     order.processing.qualityCheck.status = result === "PASS" ? "PASSED" : "FAILED";
     order.processing.qualityCheck.notes = notes;
@@ -138,7 +141,7 @@ router.post("/orders/:id/quality-check", async (req, res) => {
     order.processing.auditTrail.push({ ...actor, action: `QUALITY_${result === "PASS" ? "PASSED" : "FAILED"}`, stage: "QUALITY_CHECK", note: notes, timestamp: new Date() });
     await order.save();
     res.json({ order });
-  } catch (err) { res.status(400).json({ error: err.message || "Could not save quality check" }); }
+  } catch (err) { res.status(err.statusCode || 400).json({ error: err.message || "Could not save quality check" }); }
 });
 
 router.put("/orders/:id/status", async (req, res) => {

@@ -5,6 +5,7 @@ import Order from "../models/Order.js";
 import User from "../models/User.js";
 import { requireAuth, requirePermission } from "../middleware/auth.js";
 import { notifyAdmins, notifyUser } from "../utils/inAppNotifications.js";
+import { uploadPhotos } from "../services/cloudinaryPhotos.js";
 
 const router = express.Router();
 router.use(requireAuth);
@@ -72,11 +73,12 @@ router.post("/", async (req, res) => {
     const order = await Order.findOne({ _id: orderId, userId: req.user.id });
     if (!order) return res.status(404).json({ error: "Order not found" });
     const who = await actor(req.user.id, "CUSTOMER");
-    const issue = await Issue.create({ orderId, userId: req.user.id, category: req.body.category, description, photos: normalizePhotos(req.body.photos), auditTrail: [{ ...who, action: "ISSUE_RAISED", note: description, timestamp: new Date() }] });
+    const photos = await uploadPhotos(normalizePhotos(req.body.photos), { orderId, category: "customer-issue" });
+    const issue = await Issue.create({ orderId, userId: req.user.id, category: req.body.category, description, photos, auditTrail: [{ ...who, action: "ISSUE_RAISED", note: description, timestamp: new Date() }] });
     notifyAdmins({ title: "New customer issue", message: `${req.body.category.replaceAll("_", " ")} reported for order #${orderId.slice(-6).toUpperCase()}.`, type: "ADMIN_ISSUE", orderId, actionUrl: "/admin/issues" }).catch(() => {});
     await issue.populate(evidencePopulate);
     res.status(201).json({ issue });
-  } catch (err) { res.status(400).json({ error: err.message || "Could not raise issue" }); }
+  } catch (err) { res.status(err.statusCode || 400).json({ error: err.message || "Could not raise issue" }); }
 });
 
 router.get("/:id", async (req, res) => {

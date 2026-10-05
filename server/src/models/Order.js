@@ -49,7 +49,14 @@ const noteSchema = new mongoose.Schema(
 
 const garmentPhotoSchema = new mongoose.Schema(
   {
-    dataUrl: { type: String, required: true },
+    dataUrl: { type: String, default: "" },
+    url: { type: String, default: "" },
+    publicId: { type: String, default: "" },
+    resourceType: { type: String, default: "image" },
+    format: { type: String, default: "" },
+    bytes: { type: Number, min: 0, default: 0 },
+    width: { type: Number, min: 0, default: 0 },
+    height: { type: Number, min: 0, default: 0 },
     caption: { type: String, maxlength: 120, default: "" },
   },
   { _id: false }

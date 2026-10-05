@@ -19,6 +19,7 @@ import ServiceArea from "../models/ServiceArea.js";
 import Coupon from "../models/Coupon.js";
 import { notifyAdmins, notifyUser } from "../utils/inAppNotifications.js";
 import { notifyAdminsExternally } from "../services/adminAlerts.js";
+import { uploadHandoverItems } from "../services/cloudinaryPhotos.js";
 
 const router = express.Router();
 
@@ -407,7 +408,8 @@ router.put("/admin/:id/handover", requireAuth, requirePermission("ORDERS"), asyn
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ error: "Order not found" });
     if (["CANCELLED", "DELIVERED"].includes(order.status)) return res.status(409).json({ error: "This order can no longer be changed" });
-    const items = normalizeHandoverItems(req.body.items, order.items);
+    const normalizedItems = normalizeHandoverItems(req.body.items, order.items);
+    const items = await uploadHandoverItems(normalizedItems, orderId);
     const actor = await actorDetails(req.user.id, "ADMIN");
     const firstConfirmation = !order.handover?.confirmedAt;
     const now = new Date();
@@ -425,7 +427,7 @@ router.put("/admin/:id/handover", requireAuth, requirePermission("ORDERS"), asyn
     }
     res.json({ order });
   } catch (err) {
-    res.status(400).json({ error: err.message || "Could not save handover" });
+    res.status(err.statusCode || 400).json({ error: err.message || "Could not save handover" });
   }
 });
 
